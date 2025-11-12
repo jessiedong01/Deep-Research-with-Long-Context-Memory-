@@ -1,0 +1,19 @@
+{
+  "include": ["src", "tests"],
+  "executionEnvironments": [
+    {
+      "root": "src",
+      "pythonVersion": "3.13",
+      "extraPaths": []
+    },
+    {
+      "root": "tests",
+      "pythonVersion": "3.13",
+      "extraPaths": ["src", "."]
+    }
+  ],
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.13",
+  "typeCheckingMode": "basic"
+}
