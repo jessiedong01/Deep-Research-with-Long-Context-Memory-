@@ -24,6 +24,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  zoom: 0.8;
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -69,27 +70,37 @@ code {
   padding: 0.25rem 0.75rem;
   border-radius: 12px;
   font-size: 0.875rem;
-  font-weight: 500;
+  font-weight: 600;
   text-transform: uppercase;
 }
 
 .status-completed {
-  background-color: #d4edda;
-  color: #155724;
+  background-color: #10b981;
+  color: #ffffff;
 }
 
 .status-running,
 .status-in_progress {
-  background-color: #fff3cd;
-  color: #856404;
+  background-color: #f59e0b;
+  color: #ffffff;
 }
 
 .status-failed {
-  background-color: #f8d7da;
-  color: #721c24;
+  background-color: #ef4444;
+  color: #ffffff;
 }
 
 .status-pending {
-  background-color: #e7e7e7;
-  color: #666;
+  background-color: #6b7280;
+  color: #ffffff;
+}
+
+.status-complete {
+  background-color: #10b981;
+  color: #ffffff;
+}
+
+.status-idle {
+  background-color: #9ca3af;
+  color: #ffffff;
 }

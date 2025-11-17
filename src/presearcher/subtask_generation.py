@@ -9,6 +9,11 @@ class SubtaskGenerationAgent(dspy.Signature):
     - Generate an explanation for how to compose ONLY those subtasks, without relying on any other knowledge,
       to answer the original research task.
 
+    CRITICAL REQUIREMENT - Each subtask MUST be phrased as a standalone, independent question:
+    - DO NOT reference other subtasks (e.g., avoid "these indicators", "the countries mentioned above", "based on the previous")
+    - Each question must be completely self-contained and researchable on its own
+    - Include all necessary context directly within each subtask question
+
     Be explicit about:
     - How each subtask contributes to the final answer.
     - The order in which subtasks should be addressed (if relevant).
@@ -22,16 +27,18 @@ class SubtaskGenerationAgent(dspy.Signature):
     Subtasks:
         1. What are the main current applications of AI in healthcare (e.g., diagnostics, imaging, triage,
            drug discovery, operations, patient monitoring, administrative tasks)?
-        2. How widely are these AI applications adopted across different healthcare settings (e.g., large hospitals,
-           clinics, telehealth providers, pharma), and what are the main adoption patterns and gaps?
-        3. What evidence exists about the effectiveness and limitations of these AI applications
+        2. How widely are AI applications in healthcare (such as diagnostics, imaging, drug discovery, and administrative
+           automation) adopted across different healthcare settings (e.g., large hospitals, clinics, telehealth providers,
+           pharma), and what are the main adoption patterns and gaps?
+        3. What evidence exists about the effectiveness and limitations of AI applications in healthcare
+           (such as diagnostics, imaging, and drug discovery) compared to traditional approaches
            (e.g., accuracy vs clinicians, impact on workflow, patient outcomes, generalization issues)?
         4. What are the key barriers and risks affecting AI deployment in healthcare today
            (e.g., regulation, data quality and access, bias and fairness, interoperability, clinician trust, liability)?
         5. Who are the main types of actors driving AI in healthcare right now
            (e.g., big tech, startups, hospitals, payers, regulators) and what strategies or initiatives are they pursuing?
-        6. Given the current applications, evidence, barriers, and actors, what short-term trends (next 3–5 years)
-           are most likely to shape how AI is used in healthcare?
+        6. What short-term trends (next 3–5 years) in AI healthcare applications, evidence-based outcomes, regulatory
+           changes, and key industry actors are most likely to shape how AI is used in healthcare?
 
     Explanation for composing the subtasks to answer the research task:
 
@@ -81,9 +88,12 @@ class SubtaskGenerationAgent(dspy.Signature):
     )
 
     subtasks: list[str] = dspy.OutputField(
-        description="A list of concrete subtasks. Each subtask should be a specific, answerable question that "
-                    "contributes directly to answering the original research_task. The list must contain at most "
-                    "max_subtasks items."
+        description="A list of concrete subtasks. Each subtask MUST be phrased as a standalone, independent question "
+                    "that can be researched completely on its own without any reference to other subtasks. "
+                    "DO NOT use phrases like 'these indicators', 'the countries mentioned above', 'based on the previous', "
+                    "or any other references to other subtasks. Each subtask should include all necessary context within "
+                    "the question itself. Each subtask should be a specific, answerable question that contributes directly "
+                    "to answering the original research_task. The list must contain at most max_subtasks items."
     )
 
     composition_explanation: str = dspy.OutputField(

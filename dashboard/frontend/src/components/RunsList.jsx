@@ -10,9 +10,19 @@ export function RunsList() {
   const [runs, setRuns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [currentTime, setCurrentTime] = useState(Date.now());
 
   useEffect(() => {
     loadRuns();
+  }, []);
+
+  // Update current time every second for live duration counting
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const loadRuns = async () => {
@@ -34,10 +44,20 @@ export function RunsList() {
     return date.toLocaleString();
   };
 
-  const formatDuration = (seconds) => {
-    if (!seconds) return 'N/A';
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
+  const formatDuration = (run) => {
+    // For running tasks, calculate live duration from created_at
+    if (run.status === 'running' && run.created_at) {
+      const startTime = new Date(run.created_at).getTime();
+      const elapsed = Math.floor((currentTime - startTime) / 1000);
+      const mins = Math.floor(elapsed / 60);
+      const secs = Math.floor(elapsed % 60);
+      return `${mins}m ${secs}s`;
+    }
+    
+    // For completed/failed tasks, use the fixed duration_seconds
+    if (!run.duration_seconds) return 'N/A';
+    const mins = Math.floor(run.duration_seconds / 60);
+    const secs = Math.floor(run.duration_seconds % 60);
     return `${mins}m ${secs}s`;
   };
 
@@ -99,7 +119,14 @@ export function RunsList() {
                   </td>
                   <td className="run-id-cell">{run.run_id}</td>
                   <td>{formatDate(run.created_at)}</td>
-                  <td>{formatDuration(run.duration_seconds)}</td>
+                  <td>
+                    <div className="duration-cell">
+                      {formatDuration(run)}
+                      {run.status === 'running' && (
+                        <span className="duration-spinner"></span>
+                      )}
+                    </div>
+                  </td>
                   <td>{run.current_step || 'N/A'}</td>
                   <td>
                     <Link to={`/runs/${run.run_id}`} className="btn-link">

@@ -1,26 +1,31 @@
 .run-detail {
   min-height: 100vh;
   background: #f5f5f5;
-  zoom: 0.8;
 }
 
 .run-detail-header {
   background: white;
   border-bottom: 1px solid #e0e0e0;
-  padding: 2rem;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  padding: 0;
 }
 
-.header-content {
-  width: 100%;
+.run-detail-header .header-content {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 1rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
 .back-link {
-  display: inline-block;
   color: #646cff;
   text-decoration: none;
-  margin-bottom: 1rem;
   font-weight: 500;
+  font-size: 0.875rem;
+  display: inline-block;
+  width: fit-content;
 }
 
 .back-link:hover {
@@ -28,15 +33,17 @@
 }
 
 .run-detail-header h1 {
-  margin: 0 0 1rem 0;
+  margin: 0;
+  padding: 0;
   color: #1a1a1a;
-  font-size: 1.75rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 .run-meta {
   display: flex;
-  gap: 1.5rem;
-  flex-wrap: wrap;
+  gap: 1rem;
   align-items: center;
   color: #666;
   font-size: 0.875rem;
@@ -90,12 +97,13 @@
 .graph-and-details-container {
   display: flex;
   gap: 1rem;
-  min-height: 700px;
+  height: 700px;
 }
 
 .graph-wrapper {
   flex: 1;
   min-width: 0; /* Allows flex item to shrink below content size */
+  height: 100%;
 }
 
 .run-summary-panel {
@@ -141,51 +149,78 @@
   font-family: "Courier New", monospace;
 }
 
-.current-node-card {
+.activity-indicator-card {
   margin-top: 1.5rem;
   padding-top: 1rem;
   border-top: 1px solid #e5e7eb;
 }
 
-.current-node-card h3 {
+.activity-indicator-card h3 {
   margin: 0 0 0.75rem 0;
   font-size: 0.95rem;
   color: #111827;
 }
 
-.current-node-details {
-  background: #f9fafb;
-  border-radius: 8px;
-  padding: 0.75rem 0.9rem;
-  border-left: 3px solid #3b82f6;
-}
-
-.current-node-title {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #111827;
-  margin-bottom: 0.25rem;
-}
-
-.current-node-meta {
+.activity-indicator {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  font-size: 0.75rem;
-  color: #4b5563;
+  align-items: center;
+  gap: 1rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: 0 4px 6px rgba(102, 126, 234, 0.2);
+  transition: all 0.3s ease;
 }
 
-.current-node-meta span::before {
-  content: "• ";
+.activity-indicator.activity-completed {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
 }
 
-.current-node-meta span:first-child::before {
-  content: "";
+.activity-indicator.activity-failed {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  box-shadow: 0 4px 6px rgba(239, 68, 68, 0.3);
 }
 
-.current-node-empty {
-  font-size: 0.85rem;
-  color: #6b7280;
+.activity-spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top: 3px solid #ffffff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  flex-shrink: 0;
+}
+
+.activity-checkmark {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  color: #ffffff;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.activity-error {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  color: #ffffff;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.activity-message {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #ffffff;
+  flex: 1;
 }
 
 .run-graph-panel {
@@ -255,7 +290,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  max-height: 700px;
+  height: 100%;
 }
 
 .node-detail-header {
@@ -567,13 +602,170 @@
   }
 }
 
+/* Final Report Panel - displayed when root node is complete */
+.final-report-panel {
+  grid-column: 1 / -1;
+  background: white;
+  border-radius: 8px;
+  padding: 2rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-top: 1rem;
+}
+
+.final-report-panel h2 {
+  margin: 0 0 1.5rem 0;
+  font-size: 1.5rem;
+  color: #1a1a1a;
+  padding-bottom: 0.75rem;
+  border-bottom: 2px solid #646cff;
+}
+
+.final-report-content {
+  font-size: 1.25rem;
+  color: #374151;
+  line-height: 1.8;
+  width: 100%;
+}
+
+.final-report-content h1 {
+  font-size: 2.5rem;
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+  color: #111827;
+  font-weight: 700;
+}
+
+.final-report-content h2 {
+  font-size: 1.875rem;
+  margin-top: 1.75rem;
+  margin-bottom: 0.875rem;
+  color: #111827;
+  font-weight: 600;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 0.5rem;
+}
+
+.final-report-content h3 {
+  font-size: 1.5rem;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  color: #111827;
+  font-weight: 600;
+}
+
+.final-report-content p {
+  margin-bottom: 1rem;
+}
+
+.final-report-content ul,
+.final-report-content ol {
+  margin-bottom: 1rem;
+  padding-left: 2rem;
+}
+
+.final-report-content li {
+  margin-bottom: 0.5rem;
+}
+
+.final-report-content code {
+  background: #f3f4f6;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 1.1rem;
+  font-family: "Courier New", monospace;
+  color: #be185d;
+}
+
+.final-report-content pre {
+  background: #1f2937;
+  padding: 1rem;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin-bottom: 1rem;
+}
+
+.final-report-content pre code {
+  background: none;
+  padding: 0;
+  color: #f3f4f6;
+}
+
+.final-report-content blockquote {
+  border-left: 4px solid #646cff;
+  padding-left: 1.5rem;
+  margin-left: 0;
+  margin-bottom: 1rem;
+  color: #6b7280;
+  font-style: italic;
+  background: #f9fafb;
+  padding: 1rem 1.5rem;
+  border-radius: 4px;
+}
+
+.final-report-content a {
+  color: #3b82f6;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.final-report-content a:hover {
+  text-decoration: underline;
+}
+
+.final-report-content strong {
+  font-weight: 700;
+  color: #111827;
+}
+
+.final-report-content em {
+  font-style: italic;
+}
+
+.final-report-content hr {
+  border: none;
+  border-top: 1px solid #e5e7eb;
+  margin: 2rem 0;
+}
+
+.final-report-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+}
+
+.final-report-content th,
+.final-report-content td {
+  padding: 0.75rem;
+  border: 1px solid #e5e7eb;
+  text-align: left;
+}
+
+.final-report-content th {
+  background: #f9fafb;
+  font-weight: 600;
+  color: #111827;
+}
+
 @media (max-width: 768px) {
+  .run-detail-header .header-content {
+    padding: 1rem;
+  }
+
   .run-detail-content {
     grid-template-columns: 1fr;
+    padding: 1rem;
   }
 
   .node-detail-sidebar {
     flex: 0 0 auto;
     max-height: 400px;
+  }
+
+  .final-report-panel {
+    padding: 1.5rem;
+  }
+
+  .final-report-content {
+    font-size: 0.95rem;
   }
 }

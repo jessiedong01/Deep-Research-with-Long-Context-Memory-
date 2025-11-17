@@ -131,6 +131,12 @@ class FinalReportSynthesizer(dspy.Signature):
 
     # TODO: optionally add other input fields
 
+    quick_answer: str = dspy.OutputField(
+        desc="A 1-2 sentence direct answer to the research question. If the question asks for a recommendation, provide a clear recommendation."
+    )
+    executive_summary: str = dspy.OutputField(
+        desc="An expertly crafted summary (3-5 sentences) that clearly articulates the most important points and key findings of the report."
+    )
     final_report: str = dspy.OutputField(
         desc="The final investigative report in markdown format"
     )
@@ -173,15 +179,24 @@ class ReportGenerationAgent(dspy.Module):
         
         self.logger.debug(f"Normalized citations for {len(all_documents)} documents")
 
-        final_report = (await self.final_report_synthesizer.aforward(
-        report_thesis=final_writing_thesis,
-        writing_guideline=final_writing_guideline,
-        gathered_information=all_updated_answers,
-        lm=self.lm,
-        report_style="Comprehensive, highly accurate, and exhaustive; include every relevant detail and ensure no important information is omitted."
-    )).final_report
+        synthesizer_response = await self.final_report_synthesizer.aforward(
+            report_thesis=final_writing_thesis,
+            writing_guideline=final_writing_guideline,
+            gathered_information=all_updated_answers,
+            lm=self.lm,
+            report_style="Comprehensive, highly accurate, and exhaustive; include every relevant detail and ensure no important information is omitted."
+        )
+        
+        # Extract the three components from the synthesizer response
+        quick_answer = synthesizer_response.quick_answer
+        executive_summary = synthesizer_response.executive_summary
+        final_report = synthesizer_response.final_report
 
-        final_report_with_bibliography = final_report + "\n\n## Bibliography\n" + "\n".join([f"[{idx}]. {document.url}" for idx,document in enumerate(all_documents)])
+        # Format the final report with Quick Answer and Executive Summary at the beginning
+        formatted_report = f"## Quick Answer\n\n{quick_answer}\n\n## Executive Summary\n\n{executive_summary}\n\n{final_report}"
+        
+        # Add bibliography at the end
+        final_report_with_bibliography = formatted_report + "\n\n## Bibliography\n" + "\n".join([f"[{idx}]. {document.url}" for idx,document in enumerate(all_documents)])
         
         self.logger.debug(f"Generated report with {len(final_report_with_bibliography)} characters, citing {len(all_documents)} documents")
 

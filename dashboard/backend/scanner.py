@@ -57,6 +57,41 @@ class LogScanner:
             print(f"Error reading step file {step_file}: {e}")
             return None
     
+    def _is_root_node_completed(self, run_dir: Path) -> bool:
+        """Check if the root node in recursive_graph.json is completed.
+        
+        Returns True if the root node has status 'complete' or 'completed'.
+        Returns False if the file doesn't exist, can't be parsed, or root is not complete.
+        """
+        graph_file = run_dir / "recursive_graph.json"
+        if not graph_file.exists():
+            return False
+        
+        try:
+            with open(graph_file, 'r') as f:
+                graph_data = json.load(f)
+            
+            # Extract the graph structure
+            data = graph_data.get('data', {})
+            root_id = data.get('root_id')
+            nodes = data.get('nodes', {})
+            
+            if not root_id or not nodes:
+                return False
+            
+            # Get the root node
+            root_node = nodes.get(root_id)
+            if not root_node:
+                return False
+            
+            # Check if root node status is complete
+            root_status = root_node.get('status', '').lower()
+            return root_status in ('complete', 'completed')
+            
+        except Exception as e:
+            print(f"Error reading recursive graph from {graph_file}: {e}")
+            return False
+    
     def _parse_run_directory(self, run_dir: Path) -> Optional[RunMetadata]:
         """Parse a run directory to extract metadata."""
         run_id = run_dir.name
@@ -85,8 +120,10 @@ class LogScanner:
             # Determine status
             status = RunStatus.RUNNING
             completed_at = None
+            last_update = datetime.fromisoformat(last_log['timestamp'])
+            time_since_update = datetime.now() - last_update
             
-            # Check if pipeline completed successfully
+            # Check if pipeline completed successfully (most reliable indicator)
             if any("Pipeline completed successfully" in log.get('message', '') for log in log_lines):
                 status = RunStatus.COMPLETED
                 completed_at = datetime.fromisoformat(last_log['timestamp'])
@@ -94,21 +131,18 @@ class LogScanner:
             elif any("error" in log.get('level', '').lower() for log in log_lines):
                 status = RunStatus.FAILED
                 completed_at = datetime.fromisoformat(last_log['timestamp'])
-            # Check if final step exists - if so, likely completed even without the success message
-            elif (run_dir / "05_final_report.json").exists():
-                status = RunStatus.COMPLETED
-                completed_at = datetime.fromisoformat(last_log['timestamp'])
-            # Check if recursive_graph.json exists - indicates recursive pipeline completion
-            elif (run_dir / "recursive_graph.json").exists():
-                status = RunStatus.COMPLETED
-                completed_at = datetime.fromisoformat(last_log['timestamp'])
             # Check if run is stale (no updates in last 10 minutes) - mark as failed
-            else:
-                last_update = datetime.fromisoformat(last_log['timestamp'])
-                time_since_update = datetime.now() - last_update
-                if time_since_update.total_seconds() > 600:  # 10 minutes
-                    status = RunStatus.FAILED
+            elif time_since_update.total_seconds() > 600:  # 10 minutes
+                status = RunStatus.FAILED
+                completed_at = last_update
+            # For older runs (>2 minutes since last update), check if root node is completed
+            # This handles cases where completion message was missed but run finished
+            elif time_since_update.total_seconds() > 120:  # 2 minutes
+                # Check if the root node in recursive_graph.json is completed
+                if self._is_root_node_completed(run_dir):
+                    status = RunStatus.COMPLETED
                     completed_at = last_update
+            # Otherwise, keep as RUNNING (recursive_graph.json is created at start for real-time updates)
             
             # Extract topic from logs or step files
             topic = "Unknown"

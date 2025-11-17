@@ -30,27 +30,41 @@ Runs that crashed or were interrupted would remain in "running" state indefinite
 
 **File:** `dashboard/backend/scanner.py`
 
-Added two new status detection mechanisms:
+**Issue Found:** The initial fix incorrectly checked for `recursive_graph.json` existence immediately, but this file is created at the START of every run (for real-time updates), causing runs to be prematurely marked as completed.
+
+**Updated Fix:** Reordered status detection logic to prioritize explicit completion messages and time-based checks:
 
 ```python
-# Check if recursive_graph.json exists - indicates recursive pipeline completion
-elif (run_dir / "recursive_graph.json").exists():
+last_update = datetime.fromisoformat(last_log['timestamp'])
+time_since_update = datetime.now() - last_update
+
+# Check if pipeline completed successfully (most reliable indicator)
+if any("Pipeline completed successfully" in log.get('message', '') for log in log_lines):
     status = RunStatus.COMPLETED
     completed_at = datetime.fromisoformat(last_log['timestamp'])
-
+# Check if there's an error
+elif any("error" in log.get('level', '').lower() for log in log_lines):
+    status = RunStatus.FAILED
+    completed_at = datetime.fromisoformat(last_log['timestamp'])
 # Check if run is stale (no updates in last 10 minutes) - mark as failed
-else:
-    last_update = datetime.fromisoformat(last_log['timestamp'])
-    time_since_update = datetime.now() - last_update
-    if time_since_update.total_seconds() > 600:  # 10 minutes
-        status = RunStatus.FAILED
+elif time_since_update.total_seconds() > 600:  # 10 minutes
+    status = RunStatus.FAILED
+    completed_at = last_update
+# For older runs (>2 minutes since last update), check if final files exist
+# This handles cases where completion message was missed but run finished
+elif time_since_update.total_seconds() > 120:  # 2 minutes
+    if (run_dir / "05_final_report.json").exists() or (run_dir / "recursive_graph.json").exists():
+        status = RunStatus.COMPLETED
         completed_at = last_update
+# Otherwise, keep as RUNNING (recursive_graph.json is created at start for real-time updates)
 ```
 
 **Benefits:**
-- Properly detects completion of recursive pipeline runs
+- Prioritizes explicit completion messages over file existence
 - Automatically marks stale runs as failed after 10 minutes of inactivity
-- Prevents infinite polling of abandoned runs
+- Only uses file-based completion detection for runs idle >2 minutes
+- Prevents premature completion detection for active runs
+- Allows real-time graph updates without affecting run status
 
 ### Frontend Fix: Smart Graph Polling
 

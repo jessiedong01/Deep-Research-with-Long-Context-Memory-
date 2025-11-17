@@ -258,6 +258,8 @@ class PresearcherAgent:
                     },
                 )
 
+            # Phase 1: Create all child nodes at once (show full branching structure)
+            child_node_ids = []
             for subtask in node.subtasks:
                 if not subtask:
                     continue
@@ -276,14 +278,18 @@ class PresearcherAgent:
                     parent_id=node.id,
                     depth=depth + 1,
                 )
-                
-                # Save graph with new child node for real-time visualization
+                child_node_ids.append(child_node.id)
+            
+            # Save graph once with all children visible (as "pending/IDLE")
+            if child_node_ids:
                 self._save_graph_snapshot(request, graph, node_id)
-
+            
+            # Phase 2: Explore each child node sequentially
+            for child_id in child_node_ids:
                 await self._explore_node(
                     request=request,
                     graph=graph,
-                    node_id=child_node.id,
+                    node_id=child_id,
                     depth=depth + 1,
                     ancestor_questions=local_ancestors,
                 )

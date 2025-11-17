@@ -20,6 +20,7 @@ export function RunDetail() {
   const [graphNotFound, setGraphNotFound] = useState(false);
   const [error, setError] = useState(null);
   const [selectedNode, setSelectedNode] = useState(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   // Connect WebSocket for real-time updates if run is active
   const { messages } = useWebSocket(
@@ -47,6 +48,37 @@ export function RunDetail() {
     loadRunDetail();
     loadGraph();
   }, [runId]);
+
+  // Live timer for running tasks
+  useEffect(() => {
+    if (
+      runDetail?.metadata?.status === "running" &&
+      runDetail?.metadata?.started_at
+    ) {
+      // Calculate initial elapsed time
+      const startTime = new Date(runDetail.metadata.started_at).getTime();
+      const updateElapsed = () => {
+        const now = Date.now();
+        const elapsed = Math.floor((now - startTime) / 1000);
+        setElapsedSeconds(elapsed);
+      };
+
+      // Update immediately
+      updateElapsed();
+
+      // Update every second
+      const interval = setInterval(updateElapsed, 1000);
+
+      return () => clearInterval(interval);
+    } else if (runDetail?.metadata?.duration_seconds) {
+      // Use the fixed duration for completed runs
+      setElapsedSeconds(runDetail.metadata.duration_seconds);
+    }
+  }, [
+    runDetail?.metadata?.status,
+    runDetail?.metadata?.started_at,
+    runDetail?.metadata?.duration_seconds,
+  ]);
 
   const loadRunDetail = async () => {
     try {
@@ -88,9 +120,14 @@ export function RunDetail() {
   };
 
   const formatDuration = (seconds) => {
-    if (!seconds) return "N/A";
-    const mins = Math.floor(seconds / 60);
+    if (seconds === null || seconds === undefined) return "N/A";
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
     const secs = Math.floor(seconds % 60);
+
+    if (hours > 0) {
+      return `${hours}h ${mins}m ${secs}s`;
+    }
     return `${mins}m ${secs}s`;
   };
 
@@ -142,9 +179,7 @@ export function RunDetail() {
     for (const node of allNodes) {
       const depth = typeof node.depth === "number" ? node.depth : 0;
       const status =
-        typeof node.status === "string"
-          ? node.status.toLowerCase()
-          : "pending";
+        typeof node.status === "string" ? node.status.toLowerCase() : "pending";
       if (status === "complete" || status === "completed") {
         if (depth > bestDepth) {
           bestDepth = depth;
@@ -155,6 +190,74 @@ export function RunDetail() {
 
     return bestId;
   }, [graph, runDetail?.metadata?.status]);
+
+  // Get the root node and check if it has a completed report
+  const rootNodeReport = useMemo(() => {
+    if (!graph || !graph.graph) return null;
+
+    const { nodes, root_id: rootId } = graph.graph;
+    if (!nodes || !rootId) return null;
+
+    const rootNode = nodes[rootId];
+    if (!rootNode) return null;
+
+    const status =
+      typeof rootNode.status === "string"
+        ? rootNode.status.toLowerCase()
+        : "pending";
+
+    // Only show report if root node is completed
+    if (status === "complete" || status === "completed") {
+      return rootNode.report || rootNode.literature_writeup || null;
+    }
+
+    return null;
+  }, [graph]);
+
+  // Determine current activity message
+  const getActivityMessage = () => {
+    if (!graph || !graph.graph || !derivedCurrentNodeId) {
+      return "Initializing pipeline...";
+    }
+
+    const node = graph.graph.nodes[derivedCurrentNodeId];
+    if (!node) {
+      return "Processing...";
+    }
+
+    const status =
+      typeof node.status === "string" ? node.status.toLowerCase() : "pending";
+
+    // Determine activity based on node status and context
+    if (status === "in_progress") {
+      // Check if it's literature search or synthesis
+      if (node.literature_writeup && !node.report) {
+        return "Synthesizing research findings...";
+      } else if (!node.literature_writeup) {
+        return "Conducting literature review...";
+      } else if (node.subtasks && node.subtasks.length > 0) {
+        return "Exploring subtasks...";
+      } else {
+        return "Generating report...";
+      }
+    } else if (status === "pending") {
+      return "Queued for exploration...";
+    } else if (status === "complete" || status === "completed") {
+      // Find if there are any in-progress nodes
+      const nodes = Object.values(graph.graph.nodes);
+      const inProgressNode = nodes.find(
+        (n) =>
+          typeof n.status === "string" &&
+          n.status.toLowerCase() === "in_progress"
+      );
+      if (inProgressNode) {
+        return "Processing next node...";
+      }
+      return "Finalizing research...";
+    }
+
+    return "Processing...";
+  };
 
   if (loading) {
     return <div className="loading">Loading run details...</div>;
@@ -184,31 +287,7 @@ export function RunDetail() {
           <h1>{runDetail.metadata.topic}</h1>
           <div className="run-meta">
             {getStatusBadge(runDetail.metadata.status)}
-            {runDetail.metadata.status === "running" && (
-              <span className="live-indicator">
-                <span className="pulse"></span>
-                Live - Updating every 5s
-              </span>
-            )}
-            <span className="run-id">Run ID: {runDetail.metadata.run_id}</span>
-            <span>Created: {formatDate(runDetail.metadata.created_at)}</span>
-            <span>
-              Duration: {formatDuration(runDetail.metadata.duration_seconds)}
-            </span>
-            {typeof runDetail.metadata.max_retriever_calls === "number" && (
-              <span>
-                Max Retriever Calls: {runDetail.metadata.max_retriever_calls}
-              </span>
-            )}
-            {typeof runDetail.metadata.max_depth === "number" && (
-              <span>Max Depth: {runDetail.metadata.max_depth}</span>
-            )}
-            {typeof runDetail.metadata.max_nodes === "number" && (
-              <span>Max Nodes: {runDetail.metadata.max_nodes}</span>
-            )}
-            {typeof runDetail.metadata.max_subtasks === "number" && (
-              <span>Max Subtasks: {runDetail.metadata.max_subtasks}</span>
-            )}
+            <span>Duration: {formatDuration(elapsedSeconds)}</span>
           </div>
         </div>
       </div>
@@ -241,9 +320,7 @@ export function RunDetail() {
             </div>
             <div className="run-summary-item">
               <span className="label">Duration</span>
-              <span className="value">
-                {formatDuration(runDetail.metadata.duration_seconds)}
-              </span>
+              <span className="value">{formatDuration(elapsedSeconds)}</span>
             </div>
             {typeof runDetail.metadata.max_retriever_calls === "number" && (
               <div className="run-summary-item">
@@ -276,59 +353,47 @@ export function RunDetail() {
                 {typeof graph.metadata.total_nodes === "number" && (
                   <div className="run-summary-item">
                     <span className="label">Graph Nodes</span>
-                    <span className="value">
-                      {graph.metadata.total_nodes}
-                    </span>
+                    <span className="value">{graph.metadata.total_nodes}</span>
                   </div>
                 )}
                 {typeof graph.metadata.max_depth === "number" && (
                   <div className="run-summary-item">
                     <span className="label">Graph Max Depth</span>
-                    <span className="value">
-                      {graph.metadata.max_depth}
-                    </span>
+                    <span className="value">{graph.metadata.max_depth}</span>
                   </div>
                 )}
               </>
             )}
           </div>
 
-          <div className="current-node-card">
-            <h3>Current Node</h3>
-            {graph && derivedCurrentNodeId && graph.graph?.nodes ? (
-              (() => {
-                const node = graph.graph.nodes[derivedCurrentNodeId];
-                if (!node) {
-                  return <p className="current-node-empty">Unknown node.</p>;
-                }
-                const status =
-                  typeof node.status === "string"
-                    ? node.status.toLowerCase()
-                    : "pending";
-                return (
-                  <div className="current-node-details">
-                    <div className="current-node-title">{node.question}</div>
-                    <div className="current-node-meta">
-                      <span>Node ID: {node.id}</span>
-                      <span>Depth: {node.depth ?? 0}</span>
-                      <span>Status: {status}</span>
-                      {typeof node.is_answerable === "boolean" && (
-                        <span>
-                          Answerable:{" "}
-                          {node.is_answerable ? "Yes" : "No"}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })()
-            ) : graphLoading ? (
-              <p className="current-node-empty">Loading graph...</p>
-            ) : (
-              <p className="current-node-empty">
-                Current node information is not available yet.
-              </p>
-            )}
+          <div className="activity-indicator-card">
+            <h3>Status</h3>
+            <div
+              className={`activity-indicator ${
+                runDetail?.metadata?.status === "completed"
+                  ? "activity-completed"
+                  : runDetail?.metadata?.status === "failed"
+                  ? "activity-failed"
+                  : ""
+              }`}
+            >
+              {runDetail?.metadata?.status === "running" ? (
+                <div className="activity-spinner"></div>
+              ) : runDetail?.metadata?.status === "completed" ? (
+                <div className="activity-checkmark">✓</div>
+              ) : runDetail?.metadata?.status === "failed" ? (
+                <div className="activity-error">✗</div>
+              ) : null}
+              <div className="activity-message">
+                {runDetail?.metadata?.status === "completed"
+                  ? "Deep Research Complete"
+                  : runDetail?.metadata?.status === "failed"
+                  ? "Research Failed"
+                  : runDetail?.metadata?.status === "running"
+                  ? getActivityMessage()
+                  : "Pending"}
+              </div>
+            </div>
           </div>
         </section>
 
@@ -372,7 +437,9 @@ export function RunDetail() {
                   <>
                     <div className="node-detail-section">
                       <h4>Question</h4>
-                      <p className="node-question-full">{selectedNode.question}</p>
+                      <p className="node-question-full">
+                        {selectedNode.question}
+                      </p>
                     </div>
 
                     <div className="node-detail-section">
@@ -380,13 +447,17 @@ export function RunDetail() {
                       <div className="node-metadata-grid">
                         <div className="node-metadata-item">
                           <span className="label">Status:</span>
-                          <span className={`value status-${selectedNode.status}`}>
+                          <span
+                            className={`value status-${selectedNode.status}`}
+                          >
                             {selectedNode.status}
                           </span>
                         </div>
                         <div className="node-metadata-item">
                           <span className="label">Depth:</span>
-                          <span className="value">{selectedNode.depth ?? 0}</span>
+                          <span className="value">
+                            {selectedNode.depth ?? 0}
+                          </span>
                         </div>
                         {typeof selectedNode.is_answerable === "boolean" && (
                           <div className="node-metadata-item">
@@ -403,7 +474,8 @@ export function RunDetail() {
                       <div className="node-detail-section">
                         <h4>Literature Writeup (Before Subtasks)</h4>
                         <p className="section-description">
-                          Initial research synthesis from literature search, generated before decomposing into subtasks.
+                          Initial research synthesis from literature search,
+                          generated before decomposing into subtasks.
                         </p>
                         <div className="node-markdown-content">
                           <ReactMarkdown>
@@ -413,51 +485,54 @@ export function RunDetail() {
                       </div>
                     )}
 
-                    {selectedNode.subtasks && selectedNode.subtasks.length > 0 && (
-                      <div className="node-detail-section">
-                        <h4>Subtasks ({selectedNode.subtasks.length})</h4>
-                        <ul className="node-subtasks-list">
-                          {selectedNode.subtasks.map((subtask, index) => (
-                            <li key={index}>{subtask}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
+                    {selectedNode.subtasks &&
+                      selectedNode.subtasks.length > 0 && (
+                        <div className="node-detail-section">
+                          <h4>Subtasks ({selectedNode.subtasks.length})</h4>
+                          <ul className="node-subtasks-list">
+                            {selectedNode.subtasks.map((subtask, index) => (
+                              <li key={index}>{subtask}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
 
                     {selectedNode.report && (
                       <div className="node-detail-section">
                         <h4>Final Report (After Subtasks Complete)</h4>
                         <p className="section-description">
-                          Polished, structured report synthesized after all child nodes completed exploration. 
-                          Includes key insights, thesis, and comprehensive findings.
+                          Polished, structured report synthesized after all
+                          child nodes completed exploration. Includes key
+                          insights, thesis, and comprehensive findings.
                         </p>
                         <div className="node-markdown-content">
-                          <ReactMarkdown>
-                            {selectedNode.report}
-                          </ReactMarkdown>
+                          <ReactMarkdown>{selectedNode.report}</ReactMarkdown>
                         </div>
                       </div>
                     )}
 
-                    {selectedNode.children && selectedNode.children.length > 0 && (
-                      <div className="node-detail-section">
-                        <h4>Children Nodes ({selectedNode.children.length})</h4>
-                        <div className="node-children-list">
-                          {selectedNode.children.map((childId) => {
-                            const childNode = graph?.graph?.nodes?.[childId];
-                            return (
-                              <button
-                                key={childId}
-                                className="child-node-button"
-                                onClick={() => setSelectedNode(childNode)}
-                              >
-                                {childNode?.question || childId}
-                              </button>
-                            );
-                          })}
+                    {selectedNode.children &&
+                      selectedNode.children.length > 0 && (
+                        <div className="node-detail-section">
+                          <h4>
+                            Children Nodes ({selectedNode.children.length})
+                          </h4>
+                          <div className="node-children-list">
+                            {selectedNode.children.map((childId) => {
+                              const childNode = graph?.graph?.nodes?.[childId];
+                              return (
+                                <button
+                                  key={childId}
+                                  className="child-node-button"
+                                  onClick={() => setSelectedNode(childNode)}
+                                >
+                                  {childNode?.question || childId}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
                   </>
                 ) : (
                   <div className="node-detail-empty">
@@ -479,6 +554,15 @@ export function RunDetail() {
             </div>
           </div>
         </section>
+
+        {rootNodeReport && (
+          <section className="final-report-panel">
+            <h2>Final Research Report</h2>
+            <div className="final-report-content">
+              <ReactMarkdown>{rootNodeReport}</ReactMarkdown>
+            </div>
+          </section>
+        )}
       </div>
     </div>
   );

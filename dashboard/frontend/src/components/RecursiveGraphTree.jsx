@@ -15,8 +15,16 @@ import dagre from "dagre";
 
 // Custom node component
 function ResearchNode({ data, selected }) {
-  const { question, status, depth, isAnswerable, onClick, nodeId, currentNodeId } = data;
-  
+  const {
+    question,
+    status,
+    depth,
+    isAnswerable,
+    onClick,
+    nodeId,
+    currentNodeId,
+  } = data;
+
   const isCurrent = nodeId === currentNodeId;
   const isActive = status === "in_progress";
 
@@ -29,7 +37,12 @@ function ResearchNode({ data, selected }) {
   };
 
   const colors = statusColors[status] || statusColors.pending;
-  const displayStatus = status === "completed" ? "complete" : status;
+  const displayStatus =
+    status === "completed"
+      ? "complete"
+      : status === "pending"
+      ? "not started"
+      : status;
 
   // Truncate question to fit in node
   const truncatedQuestion =
@@ -37,7 +50,9 @@ function ResearchNode({ data, selected }) {
 
   return (
     <div
-      className={`research-node ${selected ? "selected" : ""} ${isActive ? "node-active" : ""} ${isCurrent ? "node-current" : ""}`}
+      className={`research-node ${selected ? "selected" : ""} ${
+        isActive ? "node-active" : ""
+      } ${isCurrent ? "node-current" : ""}`}
       style={{
         backgroundColor: colors.bg,
         borderColor: colors.border,
