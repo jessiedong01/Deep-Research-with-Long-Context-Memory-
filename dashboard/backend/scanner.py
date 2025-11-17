@@ -98,6 +98,17 @@ class LogScanner:
             elif (run_dir / "05_final_report.json").exists():
                 status = RunStatus.COMPLETED
                 completed_at = datetime.fromisoformat(last_log['timestamp'])
+            # Check if recursive_graph.json exists - indicates recursive pipeline completion
+            elif (run_dir / "recursive_graph.json").exists():
+                status = RunStatus.COMPLETED
+                completed_at = datetime.fromisoformat(last_log['timestamp'])
+            # Check if run is stale (no updates in last 10 minutes) - mark as failed
+            else:
+                last_update = datetime.fromisoformat(last_log['timestamp'])
+                time_since_update = datetime.now() - last_update
+                if time_since_update.total_seconds() > 600:  # 10 minutes
+                    status = RunStatus.FAILED
+                    completed_at = last_update
             
             # Extract topic from logs or step files
             topic = "Unknown"

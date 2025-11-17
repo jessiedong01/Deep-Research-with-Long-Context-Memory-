@@ -17,6 +17,7 @@ export function RunDetail() {
   const [graph, setGraph] = useState(null);
   const [graphLoading, setGraphLoading] = useState(false);
   const [graphError, setGraphError] = useState(null);
+  const [graphNotFound, setGraphNotFound] = useState(false);
   const [error, setError] = useState(null);
   const [selectedNode, setSelectedNode] = useState(null);
 
@@ -30,14 +31,19 @@ export function RunDetail() {
     if (runDetail?.metadata?.status === "running") {
       const interval = setInterval(() => {
         loadRunDetail();
-        loadGraph();
+        // Only retry loading graph if we haven't received a 404
+        if (!graphNotFound) {
+          loadGraph();
+        }
       }, 5000); // Refresh every 5 seconds
 
       return () => clearInterval(interval);
     }
-  }, [runDetail?.metadata?.status]);
+  }, [runDetail?.metadata?.status, graphNotFound]);
 
   useEffect(() => {
+    // Reset graph not found state when switching runs
+    setGraphNotFound(false);
     loadRunDetail();
     loadGraph();
   }, [runId]);
@@ -61,10 +67,15 @@ export function RunDetail() {
       const data = await api.fetchRunGraph(runId);
       setGraph(data);
       setGraphError(null);
+      setGraphNotFound(false);
     } catch (err) {
       console.error("Error loading graph:", err);
       setGraph(null);
       setGraphError(err.message);
+      // If it's a 404, mark graph as not found to avoid retrying
+      if (err.message.includes("404") || err.message.includes("not found")) {
+        setGraphNotFound(true);
+      }
     } finally {
       setGraphLoading(false);
     }
