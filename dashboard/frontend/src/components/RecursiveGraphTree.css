@@ -114,6 +114,66 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
+/* Real-time Animation Styles */
+
+/* Pulsing animation for in-progress nodes */
+.research-node.node-active {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.02);
+  }
+}
+
+/* Glowing highlight for current node being explored */
+.research-node.node-current {
+  box-shadow: 0 0 20px 4px rgba(59, 130, 246, 0.6);
+  border: 3px solid #3b82f6 !important;
+  border-width: 3px !important;
+}
+
+/* Spinning loader icon */
+.spinner-icon {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #f59e0b;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Enhanced status colors for better visibility */
+.research-node.node-active .status-badge {
+  animation: badge-pulse 2s ease-in-out infinite;
+}
+
+@keyframes badge-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .recursive-graph-container {

@@ -44,6 +44,31 @@ class PresearcherAgent:
         self.lm = lm
         self.logger = get_logger()
 
+    def _save_graph_snapshot(
+        self,
+        request: PresearcherAgentRequest,
+        graph: ResearchGraph,
+        current_node_id: str | None = None,
+    ) -> None:
+        """Save a snapshot of the research graph for real-time visualization.
+        
+        This is called after every significant graph state change to enable
+        real-time monitoring in the dashboard.
+        """
+        if not request.collect_graph:
+            return
+            
+        self.logger.save_intermediate_result(
+            "recursive_graph",
+            graph.to_dict(),
+            {
+                "root_node_id": graph.root_id or current_node_id,
+                "total_nodes": len(graph.nodes),
+                "max_depth": request.max_depth,
+                "max_nodes": request.max_nodes,
+            },
+        )
+
     async def aforward(self, request: PresearcherAgentRequest) -> PresearcherAgentResponse:
         """Run the recursive presearcher and return the root report and DAG."""
         self.logger.info(f"Starting presearcher pipeline for topic: {request.topic}")
@@ -63,6 +88,9 @@ class PresearcherAgent:
 
         graph = ResearchGraph()
         root_node = graph.get_or_create_node(question=request.topic, parent_id=None, depth=0)
+        
+        # Save initial graph with root node
+        self._save_graph_snapshot(request, graph, root_node.id)
 
         await self._explore_node(
             request=request,
@@ -126,6 +154,9 @@ class PresearcherAgent:
             "current_node",
             {"current_node_id": node.id},
         )
+        
+        # Save graph snapshot with node in_progress for real-time visualization
+        self._save_graph_snapshot(request, graph, node_id)
 
         if ancestor_questions is None:
             ancestor_questions = set()
@@ -245,6 +276,9 @@ class PresearcherAgent:
                     parent_id=node.id,
                     depth=depth + 1,
                 )
+                
+                # Save graph with new child node for real-time visualization
+                self._save_graph_snapshot(request, graph, node_id)
 
                 await self._explore_node(
                     request=request,
@@ -271,20 +305,10 @@ class PresearcherAgent:
 
         node.status = "complete"
 
-        # Save an updated snapshot of the recursive graph for visualization.
-        if request.collect_graph:
-            self.logger.save_intermediate_result(
-                "recursive_graph",
-                graph.to_dict(),
-                {
-                    "root_node_id": graph.root_id or node_id,
-                    "total_nodes": len(graph.nodes),
-                    "max_depth": request.max_depth,
-                    "max_nodes": request.max_nodes,
-                },
-            )
+        # Save graph snapshot with node complete for real-time visualization
+        self._save_graph_snapshot(request, graph, node_id)
 
-        # Also record the most recently completed node as the \"current\" node.
+        # Also record the most recently completed node as the "current" node.
         self.logger.save_intermediate_result(
             "current_node",
             {"current_node_id": node.id},

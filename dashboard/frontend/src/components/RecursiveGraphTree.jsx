@@ -15,12 +15,15 @@ import dagre from "dagre";
 
 // Custom node component
 function ResearchNode({ data, selected }) {
-  const { question, status, depth, isAnswerable, onClick } = data;
+  const { question, status, depth, isAnswerable, onClick, nodeId, currentNodeId } = data;
+  
+  const isCurrent = nodeId === currentNodeId;
+  const isActive = status === "in_progress";
 
   const statusColors = {
     complete: { bg: "#ecfdf5", border: "#10b981", text: "#059669" },
     completed: { bg: "#ecfdf5", border: "#10b981", text: "#059669" },
-    in_progress: { bg: "#fffbeb", border: "#f59e0b", text: "#d97706" },
+    in_progress: { bg: "#fef3c7", border: "#f59e0b", text: "#d97706" },
     pending: { bg: "#f9fafb", border: "#d1d5db", text: "#6b7280" },
     failed: { bg: "#fef2f2", border: "#ef4444", text: "#dc2626" },
   };
@@ -34,7 +37,7 @@ function ResearchNode({ data, selected }) {
 
   return (
     <div
-      className={`research-node ${selected ? "selected" : ""}`}
+      className={`research-node ${selected ? "selected" : ""} ${isActive ? "node-active" : ""} ${isCurrent ? "node-current" : ""}`}
       style={{
         backgroundColor: colors.bg,
         borderColor: colors.border,
@@ -48,6 +51,7 @@ function ResearchNode({ data, selected }) {
         style={{ opacity: 0 }}
       />
       <div className="node-header">
+        {isActive && <div className="spinner-icon" />}
         <span
           className="status-badge"
           style={{
@@ -169,6 +173,8 @@ export function RecursiveGraphTree({
           depth: node.depth ?? 0,
           isAnswerable: node.is_answerable,
           fullData: node,
+          nodeId,
+          currentNodeId,
           onClick: () => {
             if (onNodeClick) {
               onNodeClick(node);
