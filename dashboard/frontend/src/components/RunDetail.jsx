@@ -4,6 +4,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
+import ReactMarkdown from "react-markdown";
 import { api } from "../api";
 import { useWebSocket } from "../hooks/useWebSocket";
 import { RecursiveGraphTree } from "./RecursiveGraphTree";
@@ -17,6 +18,7 @@ export function RunDetail() {
   const [graphLoading, setGraphLoading] = useState(false);
   const [graphError, setGraphError] = useState(null);
   const [error, setError] = useState(null);
+  const [selectedNode, setSelectedNode] = useState(null);
 
   // Connect WebSocket for real-time updates if run is active
   const { messages } = useWebSocket(
@@ -312,22 +314,132 @@ export function RunDetail() {
 
         <section className="run-graph-panel">
           <h2>Recursive Research Tree</h2>
-          {graphLoading ? (
-            <div className="loading">
-              <div className="spinner"></div>
-              <p>Loading graph...</p>
+          <div className="graph-and-details-container">
+            <div className="graph-wrapper">
+              {graphLoading ? (
+                <div className="loading">
+                  <div className="spinner"></div>
+                  <p>Loading graph...</p>
+                </div>
+              ) : graphError ? (
+                <div className="error">
+                  <h3>Graph not available</h3>
+                  <p>{graphError}</p>
+                </div>
+              ) : (
+                <RecursiveGraphTree
+                  graph={graph?.graph}
+                  currentNodeId={derivedCurrentNodeId}
+                  onNodeClick={setSelectedNode}
+                />
+              )}
             </div>
-          ) : graphError ? (
-            <div className="error">
-              <h3>Graph not available</h3>
-              <p>{graphError}</p>
+
+            <div className="node-detail-sidebar">
+              <div className="node-detail-header">
+                <h3>Node Details</h3>
+                {selectedNode && (
+                  <button
+                    className="close-detail-button"
+                    onClick={() => setSelectedNode(null)}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+              <div className="node-detail-content">
+                {selectedNode ? (
+                  <>
+                    <div className="node-detail-section">
+                      <h4>Question</h4>
+                      <p className="node-question-full">{selectedNode.question}</p>
+                    </div>
+
+                    <div className="node-detail-section">
+                      <h4>Metadata</h4>
+                      <div className="node-metadata-grid">
+                        <div className="node-metadata-item">
+                          <span className="label">Status:</span>
+                          <span className={`value status-${selectedNode.status}`}>
+                            {selectedNode.status}
+                          </span>
+                        </div>
+                        <div className="node-metadata-item">
+                          <span className="label">Depth:</span>
+                          <span className="value">{selectedNode.depth ?? 0}</span>
+                        </div>
+                        {typeof selectedNode.is_answerable === "boolean" && (
+                          <div className="node-metadata-item">
+                            <span className="label">Answerable:</span>
+                            <span className="value">
+                              {selectedNode.is_answerable ? "Yes" : "No"}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {selectedNode.literature_writeup && (
+                      <div className="node-detail-section">
+                        <h4>Literature Writeup</h4>
+                        <div className="node-markdown-content">
+                          <ReactMarkdown>
+                            {selectedNode.literature_writeup}
+                          </ReactMarkdown>
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedNode.subtasks && selectedNode.subtasks.length > 0 && (
+                      <div className="node-detail-section">
+                        <h4>Subtasks ({selectedNode.subtasks.length})</h4>
+                        <ul className="node-subtasks-list">
+                          {selectedNode.subtasks.map((subtask, index) => (
+                            <li key={index}>{subtask}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {selectedNode.children && selectedNode.children.length > 0 && (
+                      <div className="node-detail-section">
+                        <h4>Children Nodes ({selectedNode.children.length})</h4>
+                        <div className="node-children-list">
+                          {selectedNode.children.map((childId) => {
+                            const childNode = graph?.graph?.nodes?.[childId];
+                            return (
+                              <button
+                                key={childId}
+                                className="child-node-button"
+                                onClick={() => setSelectedNode(childNode)}
+                              >
+                                {childNode?.question || childId}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="node-detail-empty">
+                    <svg
+                      width="64"
+                      height="64"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="M12 16v-4M12 8h.01" />
+                    </svg>
+                    <p>Select a Node to View More Details</p>
+                  </div>
+                )}
+              </div>
             </div>
-          ) : (
-            <RecursiveGraphTree
-              graph={graph?.graph}
-              currentNodeId={derivedCurrentNodeId}
-            />
-          )}
+          </div>
         </section>
       </div>
     </div>

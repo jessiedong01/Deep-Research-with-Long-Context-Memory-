@@ -1,21 +1,22 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo } from "react";
 import {
   ReactFlow,
   Background,
+  BackgroundVariant,
   Controls,
-  MiniMap,
   useNodesState,
   useEdgesState,
+  Handle,
+  Position,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import "./RecursiveGraphTree.css";
-import ReactMarkdown from "react-markdown";
 import dagre from "dagre";
 
 // Custom node component
 function ResearchNode({ data, selected }) {
   const { question, status, depth, isAnswerable, onClick } = data;
-  
+
   const statusColors = {
     complete: { bg: "#ecfdf5", border: "#10b981", text: "#059669" },
     completed: { bg: "#ecfdf5", border: "#10b981", text: "#059669" },
@@ -26,9 +27,10 @@ function ResearchNode({ data, selected }) {
 
   const colors = statusColors[status] || statusColors.pending;
   const displayStatus = status === "completed" ? "complete" : status;
-  
+
   // Truncate question to fit in node
-  const truncatedQuestion = question.length > 60 ? question.substring(0, 57) + "..." : question;
+  const truncatedQuestion =
+    question.length > 60 ? question.substring(0, 57) + "..." : question;
 
   return (
     <div
@@ -39,6 +41,12 @@ function ResearchNode({ data, selected }) {
       }}
       onClick={onClick}
     >
+      <Handle
+        type="target"
+        position={Position.Left}
+        isConnectable={false}
+        style={{ opacity: 0 }}
+      />
       <div className="node-header">
         <span
           className="status-badge"
@@ -61,6 +69,12 @@ function ResearchNode({ data, selected }) {
           )}
         </div>
       </div>
+      <Handle
+        type="source"
+        position={Position.Right}
+        isConnectable={false}
+        style={{ opacity: 0 }}
+      />
     </div>
   );
 }
@@ -73,11 +87,11 @@ const nodeTypes = {
 const getLayoutedElements = (nodes, edges, direction = "LR") => {
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
-  
+
   const nodeWidth = 240;
   const nodeHeight = 120;
-  
-  dagreGraph.setGraph({ 
+
+  dagreGraph.setGraph({
     rankdir: direction,
     nodesep: 80,
     ranksep: 150,
@@ -115,11 +129,15 @@ const getLayoutedElements = (nodes, edges, direction = "LR") => {
  * Props:
  * - graph: { root_id: string, nodes: Record<string, ResearchNodeJson> }
  * - currentNodeId?: string | null
+ * - onNodeClick?: (node) => void - callback when a node is clicked
  */
-export function RecursiveGraphTree({ graph, currentNodeId = null }) {
+export function RecursiveGraphTree({
+  graph,
+  currentNodeId = null,
+  onNodeClick = null,
+}) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const [selectedNode, setSelectedNode] = useState(null);
 
   // Transform graph data to ReactFlow format
   const { reactFlowNodes, reactFlowEdges } = useMemo(() => {
@@ -152,7 +170,9 @@ export function RecursiveGraphTree({ graph, currentNodeId = null }) {
           isAnswerable: node.is_answerable,
           fullData: node,
           onClick: () => {
-            setSelectedNode(node);
+            if (onNodeClick) {
+              onNodeClick(node);
+            }
           },
         },
         position: { x: 0, y: 0 }, // Will be set by layout algorithm
@@ -161,6 +181,10 @@ export function RecursiveGraphTree({ graph, currentNodeId = null }) {
       // Create edges to children
       if (Array.isArray(node.children)) {
         node.children.forEach((childId) => {
+          const edgeColor =
+            status === "complete" || status === "completed"
+              ? "#10b981"
+              : "#64748b";
           reactFlowEdges.push({
             id: `${nodeId}-${childId}`,
             source: nodeId,
@@ -168,12 +192,13 @@ export function RecursiveGraphTree({ graph, currentNodeId = null }) {
             type: "smoothstep",
             animated: status === "in_progress",
             style: {
-              stroke: status === "complete" || status === "completed" ? "#10b981" : "#94a3b8",
-              strokeWidth: 2,
+              stroke: edgeColor,
+              strokeWidth: 2.5,
+              strokeDasharray: "5,5",
             },
             markerEnd: {
               type: "arrowclosed",
-              color: status === "complete" || status === "completed" ? "#10b981" : "#94a3b8",
+              color: edgeColor,
             },
           });
 
@@ -185,23 +210,17 @@ export function RecursiveGraphTree({ graph, currentNodeId = null }) {
     processNode(rootId);
 
     return { reactFlowNodes, reactFlowEdges };
-  }, [graph]);
+  }, [graph, onNodeClick]);
 
   // Apply layout when data changes
   useEffect(() => {
     if (reactFlowNodes.length > 0) {
-      const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
-        reactFlowNodes,
-        reactFlowEdges
-      );
+      const { nodes: layoutedNodes, edges: layoutedEdges } =
+        getLayoutedElements(reactFlowNodes, reactFlowEdges);
       setNodes(layoutedNodes);
       setEdges(layoutedEdges);
     }
   }, [reactFlowNodes, reactFlowEdges, setNodes, setEdges]);
-
-  const handleClosePanel = useCallback(() => {
-    setSelectedNode(null);
-  }, []);
 
   if (!graph || !graph.root_id || !graph.nodes) {
     return (
@@ -213,117 +232,25 @@ export function RecursiveGraphTree({ graph, currentNodeId = null }) {
 
   return (
     <div className="recursive-graph-container">
-      <div className={`graph-view ${selectedNode ? "with-panel" : ""}`}>
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          nodeTypes={nodeTypes}
-          fitView
-          minZoom={0.1}
-          maxZoom={1.5}
-          defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
-        >
-          <Background color="#e5e7eb" gap={16} />
-          <Controls />
-          <MiniMap
-            nodeColor={(node) => {
-              const status = node.data.status;
-              const colors = {
-                complete: "#10b981",
-                completed: "#10b981",
-                in_progress: "#f59e0b",
-                pending: "#d1d5db",
-                failed: "#ef4444",
-              };
-              return colors[status] || "#d1d5db";
-            }}
-            maskColor="rgba(0, 0, 0, 0.05)"
-          />
-        </ReactFlow>
-      </div>
-
-      {selectedNode && (
-        <div className="detail-panel">
-          <div className="detail-panel-header">
-            <h3>Node Details</h3>
-            <button className="close-button" onClick={handleClosePanel}>
-              ✕
-            </button>
-          </div>
-          <div className="detail-panel-content">
-            <div className="detail-section">
-              <h4>Question</h4>
-              <p className="question-full">{selectedNode.question}</p>
-            </div>
-
-            <div className="detail-section">
-              <h4>Metadata</h4>
-              <div className="metadata-grid">
-                <div className="metadata-item">
-                  <span className="label">Status:</span>
-                  <span className={`value status-${selectedNode.status}`}>
-                    {selectedNode.status}
-                  </span>
-                </div>
-                <div className="metadata-item">
-                  <span className="label">Depth:</span>
-                  <span className="value">{selectedNode.depth ?? 0}</span>
-                </div>
-                {typeof selectedNode.is_answerable === "boolean" && (
-                  <div className="metadata-item">
-                    <span className="label">Answerable:</span>
-                    <span className="value">
-                      {selectedNode.is_answerable ? "Yes" : "No"}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {selectedNode.literature_writeup && (
-              <div className="detail-section">
-                <h4>Literature Writeup</h4>
-                <div className="markdown-content">
-                  <ReactMarkdown>{selectedNode.literature_writeup}</ReactMarkdown>
-                </div>
-              </div>
-            )}
-
-            {selectedNode.subtasks && selectedNode.subtasks.length > 0 && (
-              <div className="detail-section">
-                <h4>Subtasks ({selectedNode.subtasks.length})</h4>
-                <ul className="subtasks-list">
-                  {selectedNode.subtasks.map((subtask, index) => (
-                    <li key={index}>{subtask}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {selectedNode.children && selectedNode.children.length > 0 && (
-              <div className="detail-section">
-                <h4>Children Nodes ({selectedNode.children.length})</h4>
-                <div className="children-list">
-                  {selectedNode.children.map((childId) => {
-                    const childNode = graph.nodes[childId];
-                    return (
-                      <button
-                        key={childId}
-                        className="child-node-button"
-                        onClick={() => setSelectedNode(childNode)}
-                      >
-                        {childNode?.question || childId}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        nodeTypes={nodeTypes}
+        fitView
+        minZoom={0.1}
+        maxZoom={1.5}
+        defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
+      >
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={16}
+          size={1}
+          color="#d1d5db"
+        />
+        <Controls />
+      </ReactFlow>
     </div>
   );
 }
