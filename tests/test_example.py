@@ -43,9 +43,9 @@ def test_lm():
     """Test language model initialization and basic inference."""
     test_lm_config = LanguageModelProviderConfig(
         provider=LanguageModelProvider.LANGUAGE_MODEL_PROVIDER_AZURE_OPENAI,
-        model_name="gpt-4.1",
-        temperature=0.0,
-        max_tokens=10,
+        model_name="gpt-5-chat",
+        temperature=1.0,
+        max_tokens=16000,
         azure_openai_config=AzureOpenAIConfig(
             api_key=os.getenv("AZURE_OPENAI_API_KEY") or "",
             api_base=os.getenv("AZURE_OPENAI_BASE") or "",

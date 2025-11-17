@@ -8,6 +8,7 @@ from utils.dataclass import (
     RetrievedDocument,
 )
 from utils.literature_search import LiteratureSearchAgent
+from utils.logger import get_logger
 
 
 class KeyInsightIdentifier(dspy.Signature):
@@ -135,43 +136,54 @@ class FinalReportSynthesizer(dspy.Signature):
     )
 
 class ReportGenerationAgent(dspy.Module):
-    def __init__(self, literature_search_agent: LiteratureSearchAgent, strong_lm: dspy.LM):
+    def __init__(self, literature_search_agent: LiteratureSearchAgent, lm: dspy.LM):
         self.literature_search_agent = literature_search_agent
-        self.strong_lm = strong_lm
+        self.lm = lm
         self.key_insight_identifier = dspy.Predict(KeyInsightIdentifier)
         self.final_writing_guideline_proposal = dspy.Predict(FinalWritingGuidelineProposal)
         self.final_report_synthesizer = dspy.Predict(FinalReportSynthesizer)
+        self.logger = get_logger()
 
     async def aforward(self, request: ReportGenerationRequest) -> ReportGenerationResponse:
+        self.logger.debug(f"Generating report for topic: {request.topic}")
+        self.logger.debug(f"Processing {len(request.literature_search.rag_responses)} RAG responses")
+        
         for rag_response in request.literature_search.rag_responses:
             key_insight_result = await self.key_insight_identifier.aforward(
                 question=rag_response.question,
                 question_context=rag_response.question_context,
                 answer=rag_response.answer,
-                lm=self.strong_lm
+                lm=self.lm
             )
             rag_response.key_insight = key_insight_result.key_insight
-
+        
+        self.logger.debug(f"Extracted {len(request.literature_search.rag_responses)} key insights")
 
         final_writing_guideline_proposal_response = (await self.final_writing_guideline_proposal.aforward(
         key_insights=[f"Key Insight #{idx}: {response.key_insight}" for idx,response in enumerate(request.literature_search.rag_responses)],
-        lm=self.strong_lm
+        lm=self.lm
     ))
 
         final_writing_thesis = final_writing_guideline_proposal_response.report_thesis
         final_writing_guideline = final_writing_guideline_proposal_response.writing_guideline
+        
+        self.logger.debug(f"Report thesis: {final_writing_thesis}")
 
         all_updated_answers, all_documents = _normalize_rag_response_citation_indices(request.literature_search.rag_responses)
+        
+        self.logger.debug(f"Normalized citations for {len(all_documents)} documents")
 
         final_report = (await self.final_report_synthesizer.aforward(
         report_thesis=final_writing_thesis,
         writing_guideline=final_writing_guideline,
         gathered_information=all_updated_answers,
-        lm=self.strong_lm,
+        lm=self.lm,
         report_style="Comprehensive, highly accurate, and exhaustive; include every relevant detail and ensure no important information is omitted."
     )).final_report
 
         final_report_with_bibliography = final_report + "\n\n## Bibliography\n" + "\n".join([f"[{idx}]. {document.url}" for idx,document in enumerate(all_documents)])
+        
+        self.logger.debug(f"Generated report with {len(final_report_with_bibliography)} characters, citing {len(all_documents)} documents")
 
         return ReportGenerationResponse(
             report=final_report_with_bibliography,

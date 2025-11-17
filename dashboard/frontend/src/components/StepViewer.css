@@ -1,0 +1,268 @@
+.step-viewer {
+  padding: 2rem;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.step-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.step-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: #1a1a1a;
+}
+
+.step-content {
+  background: white;
+  border-radius: 8px;
+  padding: 2rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.no-data {
+  text-align: center;
+  color: #666;
+  padding: 3rem;
+}
+
+.research-needs {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.research-need-card {
+  background: #f9f9f9;
+  padding: 1.5rem;
+  border-radius: 8px;
+  border-left: 4px solid #646cff;
+}
+
+.research-need-card h3 {
+  margin-top: 0;
+  color: #646cff;
+  font-size: 1rem;
+}
+
+.info-section {
+  margin-top: 2rem;
+  padding: 1rem;
+  background: #f5f5f5;
+  border-radius: 4px;
+}
+
+.info-section h3 {
+  margin-top: 0;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  color: #666;
+  letter-spacing: 0.5px;
+}
+
+.markdown-content {
+  line-height: 1.6;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3 {
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  color: #1a1a1a;
+}
+
+.markdown-content h1 {
+  font-size: 1.75rem;
+  border-bottom: 2px solid #e0e0e0;
+  padding-bottom: 0.5rem;
+}
+
+.markdown-content h2 {
+  font-size: 1.5rem;
+}
+
+.markdown-content h3 {
+  font-size: 1.25rem;
+}
+
+.markdown-content p {
+  margin: 1rem 0;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  margin: 1rem 0;
+  padding-left: 2rem;
+}
+
+.markdown-content li {
+  margin: 0.5rem 0;
+}
+
+.markdown-content a {
+  color: #646cff;
+  text-decoration: none;
+}
+
+.markdown-content a:hover {
+  text-decoration: underline;
+}
+
+.markdown-content code {
+  background: #f5f5f5;
+  padding: 0.2rem 0.4rem;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.875em;
+}
+
+.markdown-content pre {
+  background: #f5f5f5;
+  padding: 1rem;
+  border-radius: 4px;
+  overflow-x: auto;
+}
+
+.rag-response-card,
+.report-card {
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: #f9f9f9;
+  border-radius: 8px;
+}
+
+.rag-response-card h3,
+.report-card h3 {
+  margin-top: 0;
+  color: #646cff;
+  border-bottom: 1px solid #e0e0e0;
+  padding-bottom: 0.5rem;
+}
+
+.question-section,
+.answer-section,
+.insight-section {
+  margin: 1.5rem 0;
+}
+
+.question-section h4,
+.answer-section h4,
+.insight-section h4 {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  color: #666;
+  letter-spacing: 0.5px;
+}
+
+.insight-section {
+  background: #fff3cd;
+  padding: 1rem;
+  border-radius: 4px;
+  border-left: 4px solid #ffc107;
+}
+
+.documents-section {
+  margin-top: 1.5rem;
+}
+
+.collapsible-header {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  background: #f5f5f5;
+  border-radius: 4px;
+  margin: 0 0 0.5rem 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #666;
+  letter-spacing: 0.5px;
+}
+
+.collapsible-header:hover {
+  background: #ececec;
+}
+
+.toggle-icon {
+  font-size: 0.75rem;
+}
+
+.documents-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.document-card {
+  padding: 0.75rem;
+  background: white;
+  border-radius: 4px;
+  border: 1px solid #e0e0e0;
+}
+
+.document-card a {
+  color: #646cff;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.document-card a:hover {
+  text-decoration: underline;
+}
+
+.final-report {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 4px;
+}
+
+.metadata-section {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background: #f9f9f9;
+  border-radius: 8px;
+}
+
+.metadata-section h3 {
+  margin-top: 0;
+  font-size: 1rem;
+  color: #666;
+}
+
+.metadata-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.metadata-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.metadata-item .label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: #999;
+  letter-spacing: 0.5px;
+}
+
+.metadata-item .value {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+

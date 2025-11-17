@@ -1,7 +1,7 @@
 import dspy
-from dspy import LM
 
 from utils.literature_search import LiteratureSearchAgent
+from utils.logger import get_logger
 
 
 class PersonaGeneration(dspy.Signature):
@@ -124,7 +124,7 @@ class IsAnswerableResearchNeed(dspy.Signature):
         description="A research need to determine if it is answerable using only the information in the literature search results."
     )
 
-    literature_search: str = dspy.InputField(
+    writeup: str = dspy.InputField(
         description="The results of a literature search on the research need."
     )
 
@@ -132,15 +132,17 @@ class IsAnswerableResearchNeed(dspy.Signature):
         description="Whether the research need is answerable using only the information in the literature search results."
     )
 
-class AnsatzAgent:
-    def __init__(self, weak_lm: LM, strong_lm: LM, literature_search_agent: LiteratureSearchAgent):
-        self.weak_lm = weak_lm
-        self.strong_lm = strong_lm
+    reasoning: str = dspy.OutputField(
+        description="The reasoning process for determining if the research need is answerable using only the information in the literature search results."
+    )
+
+class PurposeGenerationAgent:
+    def __init__(self, lm: dspy.LM):
+        self.lm = lm
         self.persona_generator = dspy.Predict(PersonaGeneration)
         self.research_needs_generator = dspy.Predict(ResearchNeedsGeneration)
         self.research_needs_reranker = dspy.Predict(ResearchNeedsReranking)
-        self.literature_search_agent = literature_search_agent
-        self.is_answerable = dspy.Predict(IsAnswerableResearchNeed)
+        self.logger = get_logger()
 
     async def aforward(self, question: str, k: int = 1) -> list[str]:
         """Generate personas and their research needs for a given research question.
@@ -152,11 +154,14 @@ class AnsatzAgent:
         Returns:
             A list of dictionaries, each containing a persona and their research needs
         """
+        self.logger.debug(f"Generating personas and research needs for: {question}")
+        
         # Step 1: Generate personas (limited to k)
+        self.logger.debug(f"Generating up to {k} personas...")
         persona_result = await self.persona_generator.aforward(
             research_task=question,
             max_personas=k,
-            lm=self.strong_lm
+            lm=self.lm
         )
         personas = persona_result.personas
 
@@ -169,6 +174,7 @@ class AnsatzAgent:
 
         # Safety limit: ensure we don't process more than k personas
         persona_list = persona_list[:k]
+        self.logger.debug(f"Generated {len(persona_list)} personas")
 
         reasearch_needs_list = []
         for persona in persona_list:
@@ -176,7 +182,7 @@ class AnsatzAgent:
                 research_task=question,
                 persona=persona,
                 max_research_needs=k,
-                lm=self.strong_lm
+                lm=self.lm
             )
             research_needs = research_needs_result.research_needs
             # Safety limit: ensure we don't return more than k research needs per persona
@@ -186,14 +192,16 @@ class AnsatzAgent:
                 "persona": persona,
                 "research_needs": research_needs
             })
+        
+        self.logger.debug(f"Generated research needs for {len(persona_list)} personas")
 
         reasearch_needs_reranker_result = await self.research_needs_reranker.aforward(
             research_needs=reasearch_needs_list,
             max_research_needs=k,
-            lm=self.strong_lm
+            lm=self.lm
         )
 
         reranked_research_needs = reasearch_needs_reranker_result.reranked_research_needs
-
+        self.logger.debug(f"Reranked to {len(reranked_research_needs)} final research needs")
 
         return reranked_research_needs

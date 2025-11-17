@@ -10,6 +10,7 @@ from utils.dataclass import (
     RagResponse,
     RetrievedDocument,
 )
+from utils.logger import get_logger
 from utils.rag import RagAgent
 from utils.utils import reset_citation_indices
 
@@ -196,7 +197,7 @@ class LiteratureSearchAnswerGenerationModule(dspy.Module):
                                    rag_responses=rag_responses)
 
 
-class LiteratureSearchAgent(dspy.Module):
+class LiteratureSearchAgent:
     """Tree-based survey agent that explores topics through strategic query generation and exploration."""
 
     def __init__(self,
@@ -213,6 +214,9 @@ class LiteratureSearchAgent(dspy.Module):
 
         # Initialize completeness checker
         self.completeness_checker = dspy.Predict(NextStepPlanner)
+        
+        # Initialize logger
+        self.logger = get_logger()
 
     def _build_tasks_summary(self, all_rag_responses: list[RagResponse]) -> str:
         """Build a summary of completed tasks for the completeness checker."""
@@ -237,14 +241,14 @@ class LiteratureSearchAgent(dspy.Module):
         # Initialize tracking structures
         all_rag_responses: list[RagResponse] = []
 
-        print(f"Starting literature search for topic: {literature_search_request.topic}")
+        self.logger.debug(f"Starting literature search for topic: {literature_search_request.topic}")
 
         # Main exploration loop
         while call_count < literature_search_request.max_retriever_calls:
             # Check completeness and get next questions
             completed_tasks_summary = self._build_tasks_summary(all_rag_responses)
 
-            print("Completeness check start.")
+            self.logger.debug("Running completeness check...")
             with dspy.context(lm=self.literature_search_lm):
                 completeness_result = await self.completeness_checker.aforward(
                     topic=literature_search_request.topic,
@@ -254,21 +258,21 @@ class LiteratureSearchAgent(dspy.Module):
                     current_iteration=call_count
                 )
 
-            print(
+            self.logger.debug(
                 f"Completeness check: {completeness_result.is_complete}, reasoning: {completeness_result.reasoning}")
 
             # Break if complete
             if completeness_result.is_complete:
-                print("Literature search deemed complete by completeness checker")
+                self.logger.debug("Literature search deemed complete by completeness checker")
                 break
 
             # Parse next questions
             next_questions = completeness_result.next_questions
             if not next_questions:
-                print("No next questions generated, ending literature search")
+                self.logger.debug("No next questions generated, ending literature search")
                 break
 
-            print(f"Generated {len(next_questions)} next questions for exploration")
+            self.logger.debug(f"Generated {len(next_questions)} next questions for exploration")
 
             # Calculate max retriever calls per question to stay within budget
             remaining_retriever_calls = literature_search_request.max_retriever_calls - call_count
