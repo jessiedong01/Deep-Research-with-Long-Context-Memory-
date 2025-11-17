@@ -16,7 +16,9 @@ from utils.dataclass import (
     PresearcherAgentRequest,
     PresearcherAgentResponse,
     ReportGenerationRequest,
-    ReportGenerationResponse
+    ReportGenerationResponse,
+    ResearchGraph,
+    _normalize_question,
 )
 
 
@@ -420,6 +422,40 @@ class TestPresearcherAgentResponse:
         
         assert result["misc"]["nested"]["list"] == [1, 2, 3]
         assert result["misc"]["nested"]["dict"]["a"] == "b"
+
+
+class TestResearchGraph:
+    """Tests for the ResearchNode/ResearchGraph DAG structures."""
+
+    def test_get_or_create_node_reuses_by_normalized_question(self):
+        """Nodes with the same normalized question map to a single graph node."""
+        graph = ResearchGraph()
+
+        root = graph.get_or_create_node("What is AI?", parent_id=None, depth=0)
+        same = graph.get_or_create_node("  what   is   AI?  ", parent_id=None, depth=1)
+
+        assert root.id == same.id
+        assert len(graph.nodes) == 1
+
+        normalized = _normalize_question("What is AI?")
+        assert root.normalized_question == normalized
+
+    def test_graph_to_dict_and_from_dict_roundtrip(self):
+        """Graph survives roundtrip serialization."""
+        graph = ResearchGraph()
+        root = graph.get_or_create_node("Root question", parent_id=None, depth=0)
+        child = graph.get_or_create_node("Child question", parent_id=root.id, depth=1)
+
+        assert child.id in graph.nodes
+        assert child.id in graph.nodes[root.id].children
+        assert root.id in graph.nodes[child.id].parents
+
+        serialized = graph.to_dict()
+        restored = ResearchGraph.from_dict(serialized)
+
+        assert restored.root_id == graph.root_id
+        assert set(restored.nodes.keys()) == set(graph.nodes.keys())
+
 
 
 class TestReportGenerationRequest:

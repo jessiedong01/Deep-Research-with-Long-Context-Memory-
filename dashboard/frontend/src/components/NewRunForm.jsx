@@ -11,6 +11,8 @@ export function NewRunForm() {
   const navigate = useNavigate();
   const [topic, setTopic] = useState('');
   const [maxRetrieverCalls, setMaxRetrieverCalls] = useState(1);
+  const [maxDepth, setMaxDepth] = useState(2);
+  const [maxNodes, setMaxNodes] = useState(50);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [runId, setRunId] = useState(null);
@@ -29,7 +31,12 @@ export function NewRunForm() {
       setIsSubmitting(true);
       setError(null);
       
-      const response = await api.startRun(topic, maxRetrieverCalls);
+      const response = await api.startRun(
+        topic,
+        maxRetrieverCalls,
+        maxDepth,
+        maxNodes
+      );
       setRunId(response.run_id);
       
       // After a brief delay, redirect to the run detail page
@@ -89,6 +96,54 @@ export function NewRunForm() {
               />
               <span className="form-help">
                 Maximum number of retrieval operations (1-20)
+              </span>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="maxDepth">
+                Max Recursion Depth
+              </label>
+              <input
+                type="number"
+                id="maxDepth"
+                value={maxDepth}
+                onChange={(e) =>
+                  setMaxDepth(
+                    Number.isNaN(parseInt(e.target.value, 10))
+                      ? 0
+                      : parseInt(e.target.value, 10)
+                  )
+                }
+                min={0}
+                max={5}
+                disabled={isSubmitting}
+              />
+              <span className="form-help">
+                How many levels of subtask decomposition (0 = no subtasks).
+              </span>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="maxNodes">
+                Max DAG Nodes
+              </label>
+              <input
+                type="number"
+                id="maxNodes"
+                value={maxNodes}
+                onChange={(e) =>
+                  setMaxNodes(
+                    Number.isNaN(parseInt(e.target.value, 10))
+                      ? 1
+                      : parseInt(e.target.value, 10)
+                  )
+                }
+                min={1}
+                max={200}
+                disabled={isSubmitting}
+              />
+              <span className="form-help">
+                Global cap on number of research tasks explored in the DAG.
               </span>
             </div>
 

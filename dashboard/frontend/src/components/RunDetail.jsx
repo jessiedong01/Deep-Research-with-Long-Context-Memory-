@@ -1,20 +1,21 @@
 /**
- * Component to display detailed information about a pipeline run
+ * Component to display detailed information about a pipeline run,
+ * including an interactive visualization of the recursive research tree.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { api } from "../api";
-import { StepViewer } from "./StepViewer";
 import { useWebSocket } from "../hooks/useWebSocket";
+import { RecursiveGraphTree } from "./RecursiveGraphTree";
 import "./RunDetail.css";
 
 export function RunDetail() {
   const { runId } = useParams();
   const [runDetail, setRunDetail] = useState(null);
-  const [selectedStep, setSelectedStep] = useState(null);
-  const [stepData, setStepData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [stepLoading, setStepLoading] = useState(false);
+  const [graph, setGraph] = useState(null);
+  const [graphLoading, setGraphLoading] = useState(false);
+  const [graphError, setGraphError] = useState(null);
   const [error, setError] = useState(null);
 
   // Connect WebSocket for real-time updates if run is active
@@ -27,6 +28,7 @@ export function RunDetail() {
     if (runDetail?.metadata?.status === "running") {
       const interval = setInterval(() => {
         loadRunDetail();
+        loadGraph();
       }, 5000); // Refresh every 5 seconds
 
       return () => clearInterval(interval);
@@ -35,30 +37,14 @@ export function RunDetail() {
 
   useEffect(() => {
     loadRunDetail();
+    loadGraph();
   }, [runId]);
-
-  useEffect(() => {
-    if (selectedStep) {
-      loadStepData(selectedStep.step_name);
-    }
-  }, [selectedStep]);
 
   const loadRunDetail = async () => {
     try {
       setLoading(true);
       const data = await api.fetchRunDetail(runId);
       setRunDetail(data);
-
-      // Select first completed step by default
-      const firstCompletedStep = data.steps.find(
-        (step) => step.status === "completed"
-      );
-      if (firstCompletedStep) {
-        setSelectedStep(firstCompletedStep);
-      } else if (data.steps.length > 0) {
-        setSelectedStep(data.steps[0]);
-      }
-
       setError(null);
     } catch (err) {
       setError(err.message);
@@ -67,22 +53,18 @@ export function RunDetail() {
     }
   };
 
-  const loadStepData = async (stepName) => {
+  const loadGraph = async () => {
     try {
-      setStepLoading(stepName); // Store which step is loading
-
-      // Fetch data and ensure minimum display time for spinner
-      const [data] = await Promise.all([
-        api.fetchStepDetail(runId, stepName),
-        new Promise((resolve) => setTimeout(resolve, 300)), // Minimum 300ms to see spinner
-      ]);
-
-      setStepData(data);
+      setGraphLoading(true);
+      const data = await api.fetchRunGraph(runId);
+      setGraph(data);
+      setGraphError(null);
     } catch (err) {
-      console.error("Error loading step data:", err);
-      setStepData(null);
+      console.error("Error loading graph:", err);
+      setGraph(null);
+      setGraphError(err.message);
     } finally {
-      setStepLoading(false);
+      setGraphLoading(false);
     }
   };
 
@@ -116,6 +98,50 @@ export function RunDetail() {
         return "○";
     }
   };
+
+  const derivedCurrentNodeId = useMemo(() => {
+    if (!graph || !graph.graph) return null;
+
+    const meta = graph.metadata || {};
+    if (typeof meta.current_node_id === "string") {
+      return meta.current_node_id;
+    }
+
+    const { nodes, root_id: rootId } = graph.graph;
+    if (!nodes || !rootId) return null;
+
+    // Prefer an in-progress node if the run is still running.
+    const allNodes = Object.values(nodes);
+    if (runDetail?.metadata?.status === "running") {
+      const inProgress = allNodes.find(
+        (node) =>
+          typeof node.status === "string" &&
+          node.status.toLowerCase() === "in_progress"
+      );
+      if (inProgress && typeof inProgress.id === "string") {
+        return inProgress.id;
+      }
+    }
+
+    // Otherwise, fall back to the deepest completed node if available.
+    let bestId = rootId;
+    let bestDepth = -1;
+    for (const node of allNodes) {
+      const depth = typeof node.depth === "number" ? node.depth : 0;
+      const status =
+        typeof node.status === "string"
+          ? node.status.toLowerCase()
+          : "pending";
+      if (status === "complete" || status === "completed") {
+        if (depth > bestDepth) {
+          bestDepth = depth;
+          bestId = node.id || bestId;
+        }
+      }
+    }
+
+    return bestId;
+  }, [graph, runDetail?.metadata?.status]);
 
   if (loading) {
     return <div className="loading">Loading run details...</div>;
@@ -156,84 +182,153 @@ export function RunDetail() {
             <span>
               Duration: {formatDuration(runDetail.metadata.duration_seconds)}
             </span>
+            {typeof runDetail.metadata.max_retriever_calls === "number" && (
+              <span>
+                Max Retriever Calls: {runDetail.metadata.max_retriever_calls}
+              </span>
+            )}
+            {typeof runDetail.metadata.max_depth === "number" && (
+              <span>Max Depth: {runDetail.metadata.max_depth}</span>
+            )}
+            {typeof runDetail.metadata.max_nodes === "number" && (
+              <span>Max Nodes: {runDetail.metadata.max_nodes}</span>
+            )}
           </div>
         </div>
       </div>
 
       <div className="run-detail-content">
-        <aside className="steps-sidebar">
-          <h2>Pipeline Steps</h2>
-          <nav className="steps-nav">
-            {runDetail.steps.map((step, idx) => (
-              <button
-                key={step.step_name}
-                className={`step-nav-item ${
-                  selectedStep?.step_name === step.step_name ? "active" : ""
-                } status-${step.status} ${
-                  stepLoading === step.step_name ? "clicking-loading" : ""
-                }`}
-                onClick={() => setSelectedStep(step)}
-                disabled={step.status === "pending"}
-              >
-                <span className="step-icon">
-                  {step.status === "in_progress" ||
-                  stepLoading === step.step_name ? (
-                    <span className="step-spinner"></span>
-                  ) : (
-                    getStepStatusIcon(step.status)
-                  )}
-                </span>
-                <div className="step-info">
-                  <div className="step-number">Step {step.step_number}</div>
-                  <div className="step-name">
-                    {step.step_name.replace(/^\d+_/, "").replace(/_/g, " ")}
-                  </div>
-                </div>
-              </button>
-            ))}
-          </nav>
-
-          <div className="timeline">
-            <h3>Timeline</h3>
-            <div className="timeline-items">
-              {runDetail.steps
-                .filter((step) => step.timestamp)
-                .map((step) => (
-                  <div key={step.step_name} className="timeline-item">
-                    <div className="timeline-time">
-                      {new Date(step.timestamp).toLocaleTimeString()}
-                    </div>
-                    <div className="timeline-label">
-                      {step.step_name.replace(/^\d+_/, "").replace(/_/g, " ")}
-                    </div>
-                  </div>
-                ))}
+        <section className="run-summary-panel">
+          <h2>Run Summary</h2>
+          <div className="run-summary-grid">
+            <div className="run-summary-item">
+              <span className="label">Topic</span>
+              <span className="value">{runDetail.metadata.topic}</span>
             </div>
+            <div className="run-summary-item">
+              <span className="label">Run ID</span>
+              <span className="value monospace">
+                {runDetail.metadata.run_id}
+              </span>
+            </div>
+            <div className="run-summary-item">
+              <span className="label">Status</span>
+              <span className="value">
+                {getStatusBadge(runDetail.metadata.status)}
+              </span>
+            </div>
+            <div className="run-summary-item">
+              <span className="label">Created</span>
+              <span className="value">
+                {formatDate(runDetail.metadata.created_at)}
+              </span>
+            </div>
+            <div className="run-summary-item">
+              <span className="label">Duration</span>
+              <span className="value">
+                {formatDuration(runDetail.metadata.duration_seconds)}
+              </span>
+            </div>
+            {typeof runDetail.metadata.max_retriever_calls === "number" && (
+              <div className="run-summary-item">
+                <span className="label">Max Retriever Calls</span>
+                <span className="value">
+                  {runDetail.metadata.max_retriever_calls}
+                </span>
+              </div>
+            )}
+            {typeof runDetail.metadata.max_depth === "number" && (
+              <div className="run-summary-item">
+                <span className="label">Max Depth</span>
+                <span className="value">{runDetail.metadata.max_depth}</span>
+              </div>
+            )}
+            {typeof runDetail.metadata.max_nodes === "number" && (
+              <div className="run-summary-item">
+                <span className="label">Max Nodes</span>
+                <span className="value">{runDetail.metadata.max_nodes}</span>
+              </div>
+            )}
+            {graph?.metadata && (
+              <>
+                {typeof graph.metadata.total_nodes === "number" && (
+                  <div className="run-summary-item">
+                    <span className="label">Graph Nodes</span>
+                    <span className="value">
+                      {graph.metadata.total_nodes}
+                    </span>
+                  </div>
+                )}
+                {typeof graph.metadata.max_depth === "number" && (
+                  <div className="run-summary-item">
+                    <span className="label">Graph Max Depth</span>
+                    <span className="value">
+                      {graph.metadata.max_depth}
+                    </span>
+                  </div>
+                )}
+              </>
+            )}
           </div>
-        </aside>
 
-        <main className="step-content-area">
-          {stepLoading && typeof stepLoading === "string" ? (
+          <div className="current-node-card">
+            <h3>Current Node</h3>
+            {graph && derivedCurrentNodeId && graph.graph?.nodes ? (
+              (() => {
+                const node = graph.graph.nodes[derivedCurrentNodeId];
+                if (!node) {
+                  return <p className="current-node-empty">Unknown node.</p>;
+                }
+                const status =
+                  typeof node.status === "string"
+                    ? node.status.toLowerCase()
+                    : "pending";
+                return (
+                  <div className="current-node-details">
+                    <div className="current-node-title">{node.question}</div>
+                    <div className="current-node-meta">
+                      <span>Node ID: {node.id}</span>
+                      <span>Depth: {node.depth ?? 0}</span>
+                      <span>Status: {status}</span>
+                      {typeof node.is_answerable === "boolean" && (
+                        <span>
+                          Answerable:{" "}
+                          {node.is_answerable ? "Yes" : "No"}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()
+            ) : graphLoading ? (
+              <p className="current-node-empty">Loading graph...</p>
+            ) : (
+              <p className="current-node-empty">
+                Current node information is not available yet.
+              </p>
+            )}
+          </div>
+        </section>
+
+        <section className="run-graph-panel">
+          <h2>Recursive Research Tree</h2>
+          {graphLoading ? (
             <div className="loading">
               <div className="spinner"></div>
-              <p>Loading step data...</p>
+              <p>Loading graph...</p>
             </div>
-          ) : selectedStep && stepData ? (
-            <StepViewer stepData={stepData.data} stepInfo={selectedStep} />
-          ) : selectedStep?.status === "pending" ? (
-            <div className="pending-message">
-              <p>⏳ This step hasn't started yet.</p>
-              {runDetail?.metadata?.status === "running" && (
-                <p className="hint">
-                  The pipeline is still running. This page will update
-                  automatically.
-                </p>
-              )}
+          ) : graphError ? (
+            <div className="error">
+              <h3>Graph not available</h3>
+              <p>{graphError}</p>
             </div>
           ) : (
-            <div className="loading">Loading step data...</div>
+            <RecursiveGraphTree
+              graph={graph?.graph}
+              currentNodeId={derivedCurrentNodeId}
+            />
           )}
-        </main>
+        </section>
       </div>
     </div>
   );

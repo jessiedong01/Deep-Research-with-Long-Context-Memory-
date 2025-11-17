@@ -291,6 +291,16 @@ python tests/run_tests.py --component rag
 python tests/run_tests.py --verbose
 ```
 
+### Low-cost DAG and recursion tests
+
+These tests exercise the recursive presearcher DAG and graph structures only, using
+dummy agents with **no external API calls or real LM usage**:
+
+```bash
+# Safely run only DAG/graph-related tests
+python -m pytest tests/test_dataclasses.py tests/test_presearcher_agent.py
+```
+
 ### Component-Specific Testing
 ```bash
 # Test purpose generation only

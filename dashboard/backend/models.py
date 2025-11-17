@@ -43,6 +43,9 @@ class RunMetadata(BaseModel):
     completed_at: Optional[datetime] = None
     duration_seconds: Optional[float] = None
     current_step: Optional[str] = None
+    max_retriever_calls: Optional[int] = None
+    max_depth: Optional[int] = None
+    max_nodes: Optional[int] = None
     steps: list[StepInfo] = Field(default_factory=list)
 
 
@@ -64,10 +67,27 @@ class StepDetailResponse(BaseModel):
     data: dict[str, Any]
 
 
+class GraphData(BaseModel):
+    """Serialized recursive research graph for a run."""
+
+    root_id: str
+    nodes: dict[str, dict[str, Any]]
+
+
+class GraphResponse(BaseModel):
+    """Response for a run's recursive research graph."""
+
+    graph: GraphData
+    # Free-form metadata (e.g., total_nodes, max_depth, max_nodes, current_node_id, etc.)
+    metadata: Optional[dict[str, Any]] = None
+
+
 class StartRunRequest(BaseModel):
     """Request to start a new pipeline run."""
     topic: str
     max_retriever_calls: int = 1
+    max_depth: int = 2
+    max_nodes: int = 50
 
 
 class StartRunResponse(BaseModel):

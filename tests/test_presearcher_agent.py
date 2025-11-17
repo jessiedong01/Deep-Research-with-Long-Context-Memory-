@@ -1,658 +1,253 @@
-"""Test suite for Presearcher Agent.
+"""Test suite for the recursive PresearcherAgent and its request/response types."""
 
-Tests the main pipeline that orchestrates purpose generation, outline generation,
-literature search, report generation, and report combination.
-"""
+from types import SimpleNamespace
+
 import pytest
-from unittest.mock import AsyncMock, Mock, patch
-import dspy
+from unittest.mock import Mock
 
+from outline_generation import OutlineGenerationAgent
 from presearcher.presearcher import PresearcherAgent
 from presearcher.purpose_generation import PurposeGenerationAgent
-from outline_generation import OutlineGenerationAgent
 from presearcher.report_generation import ReportGenerationAgent
-from utils.literature_search import LiteratureSearchAgent
 from utils.dataclass import (
+    LiteratureSearchAgentRequest,
+    LiteratureSearchAgentResponse,
     PresearcherAgentRequest,
     PresearcherAgentResponse,
-    LiteratureSearchAgentResponse,
+    ReportGenerationRequest,
     ReportGenerationResponse,
-    RagResponse,
-    RetrievedDocument
+    RetrievedDocument,
+    _normalize_question,
 )
+from utils.literature_search import LiteratureSearchAgent
+
+
+class DummyLiteratureSearchAgent:
+    """Deterministic literature search agent for testing."""
+
+    async def aforward(self, literature_search_request: LiteratureSearchAgentRequest):
+        doc = RetrievedDocument(
+            url=f"http://example.com/{literature_search_request.topic}",
+            excerpts=["Content"],
+        )
+        return LiteratureSearchAgentResponse(
+            topic=literature_search_request.topic,
+            guideline=literature_search_request.guideline,
+            writeup=f"Writeup for {literature_search_request.topic}",
+            cited_documents=[doc],
+            rag_responses=[],
+        )
+
+
+class DummyReportGenerationAgent:
+    """Deterministic report generation agent for testing."""
+
+    async def aforward(self, request: ReportGenerationRequest) -> ReportGenerationResponse:
+        return ReportGenerationResponse(
+            report=f"Report for {request.topic}",
+            cited_documents=list(request.literature_search.cited_documents),
+        )
 
 
 class TestPresearcherAgent:
-    """Tests for the main PresearcherAgent pipeline."""
-    
+    """Tests for the recursive PresearcherAgent pipeline."""
+
     @pytest.mark.asyncio
     async def test_agent_initialization(self):
-        """Test that the Presearcher agent initializes correctly."""
+        """PresearcherAgent initializes with the provided collaborators."""
         mock_purpose_agent = Mock(spec=PurposeGenerationAgent)
         mock_outline_agent = Mock(spec=OutlineGenerationAgent)
         mock_literature_agent = Mock(spec=LiteratureSearchAgent)
         mock_report_agent = Mock(spec=ReportGenerationAgent)
-        mock_lm = Mock(spec=dspy.LM)
-        
+        mock_lm = Mock()
+
         agent = PresearcherAgent(
             purpose_generation_agent=mock_purpose_agent,
             outline_generation_agent=mock_outline_agent,
             literature_search_agent=mock_literature_agent,
             report_generation_agent=mock_report_agent,
-            lm=mock_lm
+            lm=mock_lm,
         )
-        
+
         assert agent.purpose_generation_agent is mock_purpose_agent
         assert agent.outline_generation_agent is mock_outline_agent
         assert agent.literature_search_agent is mock_literature_agent
-    
+
     @pytest.mark.asyncio
-    @patch('dspy.Predict')
-    async def test_aforward_complete_pipeline(self, mock_predict_class):
-        """Test the complete presearcher pipeline from start to finish."""
-        # Setup all mock agents
+    async def test_recursive_graph_with_reuse_and_reports(self):
+        """The agent builds a DAG with reused nodes and reports on each node."""
+        # Use deterministic dummy agents for I/O-heavy components
+        dummy_literature_agent = DummyLiteratureSearchAgent()
+        dummy_report_agent = DummyReportGenerationAgent()
+
         mock_purpose_agent = Mock(spec=PurposeGenerationAgent)
         mock_outline_agent = Mock(spec=OutlineGenerationAgent)
-        mock_literature_agent = Mock(spec=LiteratureSearchAgent)
-        mock_report_agent = Mock(spec=ReportGenerationAgent)
-        mock_lm = Mock(spec=dspy.LM)
-        mock_lm.kwargs = {"temperature": 1.0}
-        
-        # Mock dspy.Predict to return a mock predictor with the expected response
-        mock_predictor = Mock()
-        mock_combiner_response = Mock()
-        mock_combiner_response.final_report = "Combined final report"
-        mock_predictor.aforward = AsyncMock(return_value=mock_combiner_response)
-        mock_predict_class.return_value = mock_predictor
-        
+        mock_lm = Mock()
+
         agent = PresearcherAgent(
             purpose_generation_agent=mock_purpose_agent,
             outline_generation_agent=mock_outline_agent,
-            literature_search_agent=mock_literature_agent,
-            report_generation_agent=mock_report_agent,
-            lm=mock_lm
+            literature_search_agent=dummy_literature_agent,
+            report_generation_agent=dummy_report_agent,
+            lm=mock_lm,
         )
-        
-        # Mock purpose generation response
-        mock_purpose_agent.aforward = AsyncMock(return_value=[
-            "Research need 1: AI diagnostic accuracy",
-            "Research need 2: AI adoption barriers"
-        ])
-        
-        # Mock outline generation response
-        mock_outline_agent.aforward = AsyncMock(return_value={
-            "markdown": "# Outline\n## Section 1\n## Section 2",
-            "parsed_outline": {}
-        })
-        
-        # Mock literature search response
-        doc = RetrievedDocument(url="http://example.com", excerpts=["Content"])
-        literature_response = LiteratureSearchAgentResponse(
-            topic="AI diagnostic accuracy",
-            guideline="Survey",
-            writeup="Literature writeup",
-            cited_documents=[doc],
-            rag_responses=[
-                RagResponse(
-                    question="Question",
-                    answer="Answer[1]",
-                    cited_documents=[doc]
+
+        # is_answerable: only the shared leaf node is answerable
+        answerable_map = {
+            "Root question": False,
+            "Child A": False,
+            "Child B": False,
+            "Shared leaf": True,
+        }
+
+        async def fake_is_answerable_aforward(research_need: str, writeup: str, lm):
+            return SimpleNamespace(is_answerable=answerable_map.get(research_need, False))
+
+        agent.is_answerable = SimpleNamespace(aforward=fake_is_answerable_aforward)
+
+        # subtask generation: root -> [Child A, Child B], both -> [Shared leaf]
+        async def fake_subtask_aforward(research_task: str, max_subtasks: int, lm):
+            if research_task == "Root question":
+                return SimpleNamespace(
+                    subtasks=["Child A", "Child B"],
+                    composition_explanation="Decompose into A and B.",
                 )
-            ]
-        )
-        mock_literature_agent.aforward = AsyncMock(return_value=literature_response)
-        
-        # Mock report generation response
-        report_response = ReportGenerationResponse(
-            report="Generated report",
-            cited_documents=[doc]
-        )
-        mock_report_agent.aforward = AsyncMock(return_value=report_response)
-        
-        # Create request
+            if research_task in {"Child A", "Child B"}:
+                return SimpleNamespace(
+                    subtasks=["Shared leaf"],
+                    composition_explanation="Both depend on same leaf.",
+                )
+            return SimpleNamespace(subtasks=[], composition_explanation="No subtasks.")
+
+        agent.subtask_generation_agent = SimpleNamespace(aforward=fake_subtask_aforward)
+
         request = PresearcherAgentRequest(
-            topic="AI in healthcare",
-            max_retriever_calls=10
+            topic="Root question",
+            max_depth=3,
+            max_nodes=10,
         )
-        
-        # Execute pipeline
+
         result = await agent.aforward(request)
-        
-        # Verify result
+
         assert isinstance(result, PresearcherAgentResponse)
-        assert result.topic == "AI in healthcare"
-        assert result.writeup == "Combined final report"
-        
-        # Verify all agents were called
-        mock_purpose_agent.aforward.assert_called_once()
-        mock_outline_agent.aforward.assert_called_once()
-        assert mock_literature_agent.aforward.call_count >= 1
-        assert mock_report_agent.aforward.call_count >= 1
-    
-    @pytest.mark.asyncio
-    @patch('dspy.Predict')
-    async def test_pipeline_calls_purpose_generation_first(self, mock_predict_class):
-        """Test that purpose generation is the first step."""
-        mock_purpose_agent = Mock(spec=PurposeGenerationAgent)
-        mock_outline_agent = Mock(spec=OutlineGenerationAgent)
-        mock_literature_agent = Mock(spec=LiteratureSearchAgent)
-        mock_report_agent = Mock(spec=ReportGenerationAgent)
-        mock_lm = Mock(spec=dspy.LM)
-        mock_lm.kwargs = {"temperature": 1.0}
-        
-        # Mock dspy.Predict for ReportCombiner
-        mock_predictor = Mock()
-        mock_combiner_response = Mock()
-        mock_combiner_response.final_report = "Final report"
-        mock_predictor.aforward = AsyncMock(return_value=mock_combiner_response)
-        mock_predict_class.return_value = mock_predictor
-        
-        agent = PresearcherAgent(
-            purpose_generation_agent=mock_purpose_agent,
-            outline_generation_agent=mock_outline_agent,
-            literature_search_agent=mock_literature_agent,
-            report_generation_agent=mock_report_agent,
-            lm=mock_lm
-        )
-        
-        # Setup mocks
-        purposes = ["Research need 1", "Research need 2"]
-        mock_purpose_agent.aforward = AsyncMock(return_value=purposes)
-        
-        mock_outline_agent.aforward = AsyncMock(return_value={
-            "markdown": "# Outline",
-            "parsed_outline": {}
-        })
-        
-        doc = RetrievedDocument(url="http://example.com", excerpts=["Content"])
-        literature_response = LiteratureSearchAgentResponse(
-            topic="Test",
-            guideline="Survey",
-            writeup="Writeup",
-            cited_documents=[doc],
-            rag_responses=[]
-        )
-        mock_literature_agent.aforward = AsyncMock(return_value=literature_response)
-        
-        report_response = ReportGenerationResponse(
-            report="Report",
-            cited_documents=[doc]
-        )
-        mock_report_agent.aforward = AsyncMock(return_value=report_response)
-        
-        request = PresearcherAgentRequest(
-            topic="Test topic",
-            max_retriever_calls=5
-        )
-        
-        result = await agent.aforward(request)
-        
-        # Verify purpose generation was called with the topic
-        mock_purpose_agent.aforward.assert_called_once_with("Test topic")
-    
-    @pytest.mark.asyncio
-    @patch('dspy.Predict')
-    async def test_pipeline_calls_outline_generation_second(self, mock_predict_class):
-        """Test that outline generation is called after purpose generation."""
-        mock_purpose_agent = Mock(spec=PurposeGenerationAgent)
-        mock_outline_agent = Mock(spec=OutlineGenerationAgent)
-        mock_literature_agent = Mock(spec=LiteratureSearchAgent)
-        mock_report_agent = Mock(spec=ReportGenerationAgent)
-        mock_lm = Mock(spec=dspy.LM)
-        mock_lm.kwargs = {"temperature": 1.0}
-        
-        # Mock dspy.Predict for ReportCombiner
-        mock_predictor = Mock()
-        mock_combiner_response = Mock()
-        mock_combiner_response.final_report = "Final report"
-        mock_predictor.aforward = AsyncMock(return_value=mock_combiner_response)
-        mock_predict_class.return_value = mock_predictor
-        
-        agent = PresearcherAgent(
-            purpose_generation_agent=mock_purpose_agent,
-            outline_generation_agent=mock_outline_agent,
-            literature_search_agent=mock_literature_agent,
-            report_generation_agent=mock_report_agent,
-            lm=mock_lm
-        )
-        
-        purposes = ["Research need 1", "Research need 2"]
-        mock_purpose_agent.aforward = AsyncMock(return_value=purposes)
-        
-        mock_outline_agent.aforward = AsyncMock(return_value={
-            "markdown": "# Outline",
-            "parsed_outline": {}
-        })
-        
-        doc = RetrievedDocument(url="http://example.com", excerpts=["Content"])
-        literature_response = LiteratureSearchAgentResponse(
-            topic="Test",
-            guideline="Survey",
-            writeup="Writeup",
-            cited_documents=[doc],
-            rag_responses=[]
-        )
-        mock_literature_agent.aforward = AsyncMock(return_value=literature_response)
-        
-        report_response = ReportGenerationResponse(
-            report="Report",
-            cited_documents=[doc]
-        )
-        mock_report_agent.aforward = AsyncMock(return_value=report_response)
-        
-        request = PresearcherAgentRequest(
-            topic="Test topic",
-            max_retriever_calls=5
-        )
-        
-        await agent.aforward(request)
-        
-        # Verify outline generation was called with topic and purposes
-        mock_outline_agent.aforward.assert_called_once_with("Test topic", purposes)
-    
-    @pytest.mark.asyncio
-    @patch('dspy.Predict')
-    async def test_pipeline_performs_literature_search_for_each_need(self, mock_predict_class):
-        """Test that literature search is performed for each research need."""
-        mock_purpose_agent = Mock(spec=PurposeGenerationAgent)
-        mock_outline_agent = Mock(spec=OutlineGenerationAgent)
-        mock_literature_agent = Mock(spec=LiteratureSearchAgent)
-        mock_report_agent = Mock(spec=ReportGenerationAgent)
-        mock_lm = Mock(spec=dspy.LM)
-        mock_lm.kwargs = {"temperature": 1.0}
-        
-        # Mock dspy.Predict for ReportCombiner
-        mock_predictor = Mock()
-        mock_combiner_response = Mock()
-        mock_combiner_response.final_report = "Final report"
-        mock_predictor.aforward = AsyncMock(return_value=mock_combiner_response)
-        mock_predict_class.return_value = mock_predictor
-        
-        agent = PresearcherAgent(
-            purpose_generation_agent=mock_purpose_agent,
-            outline_generation_agent=mock_outline_agent,
-            literature_search_agent=mock_literature_agent,
-            report_generation_agent=mock_report_agent,
-            lm=mock_lm
-        )
-        
-        # Three research needs
-        purposes = [
-            "Research need 1",
-            "Research need 2",
-            "Research need 3"
+        assert result.writeup.startswith("Report for Root question")
+        assert result.graph is not None
+        assert result.root_node_id is not None
+
+        graph = result.graph
+        assert graph is not None
+
+        # DAG should contain exactly one node per normalized question
+        normalized_questions = [
+            _normalize_question(node.question) for node in graph.nodes.values()
         ]
-        mock_purpose_agent.aforward = AsyncMock(return_value=purposes)
-        
-        mock_outline_agent.aforward = AsyncMock(return_value={
-            "markdown": "# Outline",
-            "parsed_outline": {}
-        })
-        
-        doc = RetrievedDocument(url="http://example.com", excerpts=["Content"])
-        literature_response = LiteratureSearchAgentResponse(
-            topic="Test",
-            guideline="Survey",
-            writeup="Writeup",
-            cited_documents=[doc],
-            rag_responses=[]
-        )
-        mock_literature_agent.aforward = AsyncMock(return_value=literature_response)
-        
-        report_response = ReportGenerationResponse(
-            report="Report",
-            cited_documents=[doc]
-        )
-        mock_report_agent.aforward = AsyncMock(return_value=report_response)
-        request = PresearcherAgentRequest(
-            topic="Test topic",
-            max_retriever_calls=15
-        )
-        
-        await agent.aforward(request)
-        
-        # Should call literature search 3 times (once per research need)
-        assert mock_literature_agent.aforward.call_count == 3
-    
+        assert len(set(normalized_questions)) == len(graph.nodes)
+
+        # We expect four logical nodes: root, two children, and one shared leaf
+        assert len(graph.nodes) == 4
+
+        # Find the shared leaf and ensure it has two parents (reused across branches)
+        shared_nodes = [
+            node for node in graph.nodes.values() if node.question == "Shared leaf"
+        ]
+        assert len(shared_nodes) == 1
+        shared_node = shared_nodes[0]
+        assert len(shared_node.parents) == 2
+
+        # Every node should have a non-empty report
+        for node in graph.nodes.values():
+            assert node.report is not None
+            assert node.report != ""
+
     @pytest.mark.asyncio
-    @patch('dspy.Predict')
-    async def test_pipeline_generates_report_for_each_need(self, mock_predict_class):
-        """Test that report generation is performed for each research need."""
+    async def test_respects_max_depth_and_max_nodes(self):
+        """Recursion respects depth and node budget limits."""
+        dummy_literature_agent = DummyLiteratureSearchAgent()
+        dummy_report_agent = DummyReportGenerationAgent()
+
         mock_purpose_agent = Mock(spec=PurposeGenerationAgent)
         mock_outline_agent = Mock(spec=OutlineGenerationAgent)
-        mock_literature_agent = Mock(spec=LiteratureSearchAgent)
-        mock_report_agent = Mock(spec=ReportGenerationAgent)
-        mock_lm = Mock(spec=dspy.LM)
-        mock_lm.kwargs = {"temperature": 1.0}
-        
-        # Mock dspy.Predict for ReportCombiner
-        mock_predictor = Mock()
-        mock_combiner_response = Mock()
-        mock_combiner_response.final_report = "Final report"
-        mock_predictor.aforward = AsyncMock(return_value=mock_combiner_response)
-        mock_predict_class.return_value = mock_predictor
-        
+        mock_lm = Mock()
+
         agent = PresearcherAgent(
             purpose_generation_agent=mock_purpose_agent,
             outline_generation_agent=mock_outline_agent,
-            literature_search_agent=mock_literature_agent,
-            report_generation_agent=mock_report_agent,
-            lm=mock_lm
+            literature_search_agent=dummy_literature_agent,
+            report_generation_agent=dummy_report_agent,
+            lm=mock_lm,
         )
-        
-        purposes = ["Research need 1", "Research need 2"]
-        mock_purpose_agent.aforward = AsyncMock(return_value=purposes)
-        
-        mock_outline_agent.aforward = AsyncMock(return_value={
-            "markdown": "# Outline",
-            "parsed_outline": {}
-        })
-        
-        doc = RetrievedDocument(url="http://example.com", excerpts=["Content"])
-        literature_response = LiteratureSearchAgentResponse(
-            topic="Test",
-            guideline="Survey",
-            writeup="Writeup",
-            cited_documents=[doc],
-            rag_responses=[]
+
+        # Never answerable so the agent would recurse if allowed
+        async def fake_is_answerable_aforward(research_need: str, writeup: str, lm):
+            return SimpleNamespace(is_answerable=False)
+
+        agent.is_answerable = SimpleNamespace(aforward=fake_is_answerable_aforward)
+
+        # Every node produces a single child "Next"
+        async def fake_subtask_aforward(research_task: str, max_subtasks: int, lm):
+            return SimpleNamespace(
+                subtasks=[f"{research_task} -> Next"],
+                composition_explanation="Chain to next node.",
+            )
+
+        agent.subtask_generation_agent = SimpleNamespace(aforward=fake_subtask_aforward)
+
+        # Depth limit 0: no decomposition, only root node
+        request_depth_0 = PresearcherAgentRequest(
+            topic="Depth-limited root",
+            max_depth=0,
+            max_nodes=10,
         )
-        mock_literature_agent.aforward = AsyncMock(return_value=literature_response)
-        
-        report_response = ReportGenerationResponse(
-            report="Report",
-            cited_documents=[doc]
+        result_depth_0 = await agent.aforward(request_depth_0)
+        assert result_depth_0.graph is not None
+        assert len(result_depth_0.graph.nodes) == 1
+
+        # Depth limit 2, but node budget of 2 should cap expansion early
+        request_budget = PresearcherAgentRequest(
+            topic="Budget-limited root",
+            max_depth=5,
+            max_nodes=2,
         )
-        mock_report_agent.aforward = AsyncMock(return_value=report_response)
-        request = PresearcherAgentRequest(
-            topic="Test topic",
-            max_retriever_calls=10
-        )
-        
-        await agent.aforward(request)
-        
-        # Should call report generation 2 times
-        assert mock_report_agent.aforward.call_count == 2
-    
-    @pytest.mark.asyncio
-    @patch('dspy.Predict')
-    async def test_pipeline_combines_reports_at_end(self, mock_predict_class):
-        """Test that reports are combined at the end of the pipeline."""
-        mock_purpose_agent = Mock(spec=PurposeGenerationAgent)
-        mock_outline_agent = Mock(spec=OutlineGenerationAgent)
-        mock_literature_agent = Mock(spec=LiteratureSearchAgent)
-        mock_report_agent = Mock(spec=ReportGenerationAgent)
-        mock_lm = Mock(spec=dspy.LM)
-        mock_lm.kwargs = {"temperature": 1.0}
-        
-        # Mock dspy.Predict for ReportCombiner
-        mock_predictor = Mock()
-        mock_combiner_response = Mock()
-        mock_combiner_response.final_report = "Combined final report"
-        mock_predictor.aforward = AsyncMock(return_value=mock_combiner_response)
-        mock_predict_class.return_value = mock_predictor
-        
-        agent = PresearcherAgent(
-            purpose_generation_agent=mock_purpose_agent,
-            outline_generation_agent=mock_outline_agent,
-            literature_search_agent=mock_literature_agent,
-            report_generation_agent=mock_report_agent,
-            lm=mock_lm
-        )
-        
-        purposes = ["Research need 1"]
-        mock_purpose_agent.aforward = AsyncMock(return_value=purposes)
-        
-        mock_outline_agent.aforward = AsyncMock(return_value={
-            "markdown": "# Outline",
-            "parsed_outline": {}
-        })
-        
-        doc = RetrievedDocument(url="http://example.com", excerpts=["Content"])
-        literature_response = LiteratureSearchAgentResponse(
-            topic="Test",
-            guideline="Survey",
-            writeup="Writeup",
-            cited_documents=[doc],
-            rag_responses=[]
-        )
-        mock_literature_agent.aforward = AsyncMock(return_value=literature_response)
-        
-        report_response = ReportGenerationResponse(
-            report="Individual report",
-            cited_documents=[doc]
-        )
-        mock_report_agent.aforward = AsyncMock(return_value=report_response)
-        request = PresearcherAgentRequest(
-            topic="Test topic",
-            max_retriever_calls=5
-        )
-        
-        result = await agent.aforward(request)
-        
-        # Verify the final report is from the combiner
-        assert result.writeup == "Combined final report"
-        # Verify that dspy.Predict was called to create the report combiner
-        mock_predict_class.assert_called()
+        result_budget = await agent.aforward(request_budget)
+        assert result_budget.graph is not None
+        assert len(result_budget.graph.nodes) == 2
 
 
-class TestPresearcherAgentRequest:
-    """Tests for the PresearcherAgentRequest dataclass."""
-    
+class TestPresearcherAgentRequestAndResponse:
+    """Tests for the PresearcherAgentRequest/Response dataclasses."""
+
     def test_request_initialization_with_defaults(self):
-        """Test that request can be initialized with default values."""
-        request = PresearcherAgentRequest(
-            topic="Test topic"
-        )
-        
+        """Request initializes with sensible defaults."""
+        request = PresearcherAgentRequest(topic="Test topic")
+
         assert request.topic == "Test topic"
-        assert request.max_retriever_calls == 15  # Default value
+        assert request.max_retriever_calls == 15
         assert request.guideline is not None
-    
-    def test_request_initialization_with_custom_values(self):
-        """Test that request can be initialized with custom values."""
-        request = PresearcherAgentRequest(
-            topic="Custom topic",
-            max_retriever_calls=25,
-            guideline="Custom guideline"
-        )
-        
-        assert request.topic == "Custom topic"
-        assert request.max_retriever_calls == 25
-        assert request.guideline == "Custom guideline"
+        assert request.max_depth == 2
+        assert request.max_nodes == 50
+        assert request.collect_graph is True
 
-
-class TestPresearcherAgentResponse:
-    """Tests for the PresearcherAgentResponse dataclass."""
-    
-    def test_response_to_dict(self):
-        """Test that response can be serialized to dictionary."""
+    def test_response_to_dict_includes_graph_optional_fields(self):
+        """Response serialization includes optional DAG fields."""
         doc = RetrievedDocument(url="http://example.com", excerpts=["Content"])
-        
+
         response = PresearcherAgentResponse(
             topic="Test topic",
             guideline="Test guideline",
             writeup="Test writeup",
             cited_documents=[doc],
             rag_responses=[],
-            misc={}
+            misc={"key": "value"},
+            root_node_id="node_1",
+            graph=None,
         )
-        
+
         result = response.to_dict()
-        
+
         assert isinstance(result, dict)
         assert result["topic"] == "Test topic"
         assert result["guideline"] == "Test guideline"
         assert result["writeup"] == "Test writeup"
         assert len(result["cited_documents"]) == 1
-
-
-class TestPresearcherAgentEdgeCases:
-    """Tests for edge cases and error handling."""
-    
-    @pytest.mark.asyncio
-    @patch('dspy.Predict')
-    async def test_empty_purposes_list(self, mock_predict_class):
-        """Test pipeline behavior when no research needs are generated."""
-        mock_purpose_agent = Mock(spec=PurposeGenerationAgent)
-        mock_outline_agent = Mock(spec=OutlineGenerationAgent)
-        mock_literature_agent = Mock(spec=LiteratureSearchAgent)
-        mock_report_agent = Mock(spec=ReportGenerationAgent)
-        mock_lm = Mock(spec=dspy.LM)
-        mock_lm.kwargs = {"temperature": 1.0}
-        
-        # Mock dspy.Predict for ReportCombiner
-        mock_predictor = Mock()
-        mock_combiner_response = Mock()
-        mock_combiner_response.final_report = "Empty report"
-        mock_predictor.aforward = AsyncMock(return_value=mock_combiner_response)
-        mock_predict_class.return_value = mock_predictor
-        
-        agent = PresearcherAgent(
-            purpose_generation_agent=mock_purpose_agent,
-            outline_generation_agent=mock_outline_agent,
-            literature_search_agent=mock_literature_agent,
-            report_generation_agent=mock_report_agent,
-            lm=mock_lm
-        )
-        
-        # No research needs
-        mock_purpose_agent.aforward = AsyncMock(return_value=[])
-        
-        mock_outline_agent.aforward = AsyncMock(return_value={
-            "markdown": "# Outline",
-            "parsed_outline": {}
-        })
-        request = PresearcherAgentRequest(
-            topic="Test topic",
-            max_retriever_calls=5
-        )
-        
-        result = await agent.aforward(request)
-        
-        # Should not call literature search or report generation
-        assert mock_literature_agent.aforward.call_count == 0
-        assert mock_report_agent.aforward.call_count == 0
-        
-        # Should still return a response
-        assert isinstance(result, PresearcherAgentResponse)
-    
-    @pytest.mark.asyncio
-    @patch('dspy.Predict')
-    async def test_single_research_need(self, mock_predict_class):
-        """Test pipeline with only one research need."""
-        mock_purpose_agent = Mock(spec=PurposeGenerationAgent)
-        mock_outline_agent = Mock(spec=OutlineGenerationAgent)
-        mock_literature_agent = Mock(spec=LiteratureSearchAgent)
-        mock_report_agent = Mock(spec=ReportGenerationAgent)
-        mock_lm = Mock(spec=dspy.LM)
-        mock_lm.kwargs = {"temperature": 1.0}
-        
-        # Mock dspy.Predict for ReportCombiner
-        mock_predictor = Mock()
-        mock_combiner_response = Mock()
-        mock_combiner_response.final_report = "Final single report"
-        mock_predictor.aforward = AsyncMock(return_value=mock_combiner_response)
-        mock_predict_class.return_value = mock_predictor
-        
-        agent = PresearcherAgent(
-            purpose_generation_agent=mock_purpose_agent,
-            outline_generation_agent=mock_outline_agent,
-            literature_search_agent=mock_literature_agent,
-            report_generation_agent=mock_report_agent,
-            lm=mock_lm
-        )
-        
-        purposes = ["Single research need"]
-        mock_purpose_agent.aforward = AsyncMock(return_value=purposes)
-        
-        mock_outline_agent.aforward = AsyncMock(return_value={
-            "markdown": "# Outline",
-            "parsed_outline": {}
-        })
-        
-        doc = RetrievedDocument(url="http://example.com", excerpts=["Content"])
-        literature_response = LiteratureSearchAgentResponse(
-            topic="Test",
-            guideline="Survey",
-            writeup="Writeup",
-            cited_documents=[doc],
-            rag_responses=[]
-        )
-        mock_literature_agent.aforward = AsyncMock(return_value=literature_response)
-        
-        report_response = ReportGenerationResponse(
-            report="Single report",
-            cited_documents=[doc]
-        )
-        mock_report_agent.aforward = AsyncMock(return_value=report_response)
-        request = PresearcherAgentRequest(
-            topic="Test topic",
-            max_retriever_calls=5
-        )
-        
-        result = await agent.aforward(request)
-        
-        # Should process the single need
-        assert mock_literature_agent.aforward.call_count == 1
-        assert mock_report_agent.aforward.call_count == 1
-        assert isinstance(result, PresearcherAgentResponse)
-    
-    @pytest.mark.asyncio
-    @patch('dspy.Predict')
-    async def test_low_max_retriever_calls(self, mock_predict_class):
-        """Test pipeline with very low retriever call budget."""
-        mock_purpose_agent = Mock(spec=PurposeGenerationAgent)
-        mock_outline_agent = Mock(spec=OutlineGenerationAgent)
-        mock_literature_agent = Mock(spec=LiteratureSearchAgent)
-        mock_report_agent = Mock(spec=ReportGenerationAgent)
-        mock_lm = Mock(spec=dspy.LM)
-        mock_lm.kwargs = {"temperature": 1.0}
-        
-        # Mock dspy.Predict for ReportCombiner
-        mock_predictor = Mock()
-        mock_combiner_response = Mock()
-        mock_combiner_response.final_report = "Final report"
-        mock_predictor.aforward = AsyncMock(return_value=mock_combiner_response)
-        mock_predict_class.return_value = mock_predictor
-        
-        agent = PresearcherAgent(
-            purpose_generation_agent=mock_purpose_agent,
-            outline_generation_agent=mock_outline_agent,
-            literature_search_agent=mock_literature_agent,
-            report_generation_agent=mock_report_agent,
-            lm=mock_lm
-        )
-        
-        purposes = ["Research need 1"]
-        mock_purpose_agent.aforward = AsyncMock(return_value=purposes)
-        
-        mock_outline_agent.aforward = AsyncMock(return_value={
-            "markdown": "# Outline",
-            "parsed_outline": {}
-        })
-        
-        doc = RetrievedDocument(url="http://example.com", excerpts=["Content"])
-        literature_response = LiteratureSearchAgentResponse(
-            topic="Test",
-            guideline="Survey",
-            writeup="Writeup",
-            cited_documents=[doc],
-            rag_responses=[]
-        )
-        mock_literature_agent.aforward = AsyncMock(return_value=literature_response)
-        
-        report_response = ReportGenerationResponse(
-            report="Report",
-            cited_documents=[doc]
-        )
-        mock_report_agent.aforward = AsyncMock(return_value=report_response)
-        request = PresearcherAgentRequest(
-            topic="Test topic",
-            max_retriever_calls=1  # Very low budget
-        )
-        
-        result = await agent.aforward(request)
-        
-        # Should still complete
-        assert isinstance(result, PresearcherAgentResponse)
-
+        assert result["misc"]["key"] == "value"
+        assert result["root_node_id"] == "node_1"

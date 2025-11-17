@@ -116,6 +116,22 @@ class LogScanner:
             
             # Parse steps
             steps = self._parse_steps(run_dir, log_lines)
+
+            # Attempt to read run configuration (recursive hyperparameters)
+            max_retriever_calls = None
+            max_depth = None
+            max_nodes = None
+            run_config_file = run_dir / "00_run_config.json"
+            if run_config_file.exists():
+                try:
+                    with open(run_config_file, "r") as f:
+                        run_config = json.load(f)
+                    cfg = run_config.get("data", {})
+                    max_retriever_calls = cfg.get("max_retriever_calls")
+                    max_depth = cfg.get("max_depth")
+                    max_nodes = cfg.get("max_nodes")
+                except Exception as e:
+                    print(f"Error reading run config from {run_config_file}: {e}")
             
             # Calculate duration
             duration_seconds = None
@@ -141,6 +157,9 @@ class LogScanner:
                 completed_at=completed_at,
                 duration_seconds=duration_seconds,
                 current_step=current_step,
+                 max_retriever_calls=max_retriever_calls,
+                 max_depth=max_depth,
+                 max_nodes=max_nodes,
                 steps=steps
             )
             
@@ -155,7 +174,7 @@ class LogScanner:
             "02_outline_generation",
             "03_literature_search",
             "04_report_generation",
-            "05_final_report"
+            "05_final_report",
         ]
         
         # Determine which step is currently in progress by checking logs
@@ -178,7 +197,7 @@ class LogScanner:
                 current_step_in_progress = "05_final_report"
                 break
         
-        steps = []
+        steps: list[StepInfo] = []
         for i, step_name in enumerate(step_names, 1):
             step_file = run_dir / f"{step_name}.json"
             
@@ -218,6 +237,41 @@ class LogScanner:
                         step_number=i,
                         status=StepStatus.PENDING
                     ))
-        
+
+        # Add any additional step JSON files (e.g., recursive_graph) that
+        # aren't part of the legacy fixed step list.
+        existing_names = {step.step_name for step in steps}
+        for step_file in sorted(run_dir.glob("*.json")):
+            stem = step_file.stem
+            if stem in existing_names or stem == "pipeline":
+                continue
+
+            try:
+                with open(step_file, 'r') as f:
+                    step_data = json.load(f)
+
+                timestamp_str = step_data.get("timestamp")
+                timestamp = (
+                    datetime.fromisoformat(timestamp_str)
+                    if isinstance(timestamp_str, str)
+                    else None
+                )
+
+                steps.append(StepInfo(
+                    step_name=stem,
+                    step_number=len(steps) + 1,
+                    status=StepStatus.COMPLETED,
+                    timestamp=timestamp,
+                    data=step_data.get("data"),
+                    metadata=step_data.get("metadata"),
+                ))
+            except Exception as e:
+                print(f"Error reading additional step file {step_file}: {e}")
+                steps.append(StepInfo(
+                    step_name=stem,
+                    step_number=len(steps) + 1,
+                    status=StepStatus.FAILED
+                ))
+
         return steps
 

@@ -41,7 +41,7 @@ export const api = {
   /**
    * Start a new pipeline run
    */
-  async startRun(topic, maxRetrieverCalls = 1) {
+  async startRun(topic, maxRetrieverCalls = 1, maxDepth = 2, maxNodes = 50) {
     const response = await fetch(`${API_BASE_URL}/api/runs/start`, {
       method: 'POST',
       headers: {
@@ -50,6 +50,8 @@ export const api = {
       body: JSON.stringify({
         topic,
         max_retriever_calls: maxRetrieverCalls,
+        max_depth: maxDepth,
+        max_nodes: maxNodes,
       }),
     });
     if (!response.ok) {
@@ -74,6 +76,17 @@ export const api = {
    */
   createWebSocket(runId) {
     return new WebSocket(`ws://localhost:8000/ws/${runId}`);
+  },
+
+  /**
+   * Fetch the recursive research graph for a specific run
+   */
+  async fetchRunGraph(runId) {
+    const response = await fetch(`${API_BASE_URL}/api/runs/${runId}/graph`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch graph for run ${runId}`);
+    }
+    return response.json();
   },
 };
 

@@ -298,6 +298,220 @@ export function StepViewer({ stepData, stepInfo }) {
     </div>
   );
 
+  // Render root literature search step for the recursive pipeline
+  const renderRootLiteratureSearch = () => (
+    <div className="step-content">
+      <h2>Root Literature Search</h2>
+      {data.topic && (
+        <div className="info-section">
+          <h3>Topic</h3>
+          <p>{data.topic}</p>
+        </div>
+      )}
+      {data.writeup && (
+        <div className="markdown-content">
+          <ReactMarkdown>{data.writeup}</ReactMarkdown>
+        </div>
+      )}
+      {Array.isArray(data.cited_documents) && data.cited_documents.length > 0 && (
+        <div className="documents-section">
+          <h3>Cited Documents</h3>
+          <div className="documents-list">
+            {data.cited_documents.map((doc, idx) => (
+              <div key={idx} className="document-card">
+                <a
+                  href={doc.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {doc.title || doc.url}
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // Render root answerability decision step
+  const renderRootIsAnswerable = () => (
+    <div className="step-content">
+      <h2>Root Answerability Decision</h2>
+      {data.topic && (
+        <div className="info-section">
+          <h3>Topic</h3>
+          <p>{data.topic}</p>
+        </div>
+      )}
+      <div className="info-section">
+        <h3>Is Answerable?</h3>
+        <p>{data.is_answerable ? "Yes" : "No"}</p>
+      </div>
+      {data.reasoning && (
+        <div className="info-section">
+          <h3>Reasoning</h3>
+          <p>{data.reasoning}</p>
+        </div>
+      )}
+    </div>
+  );
+
+  // Render root subtask generation step
+  const renderRootSubtaskGeneration = () => (
+    <div className="step-content">
+      <h2>Root Subtask Generation</h2>
+      {data.topic && (
+        <div className="info-section">
+          <h3>Topic</h3>
+          <p>{data.topic}</p>
+        </div>
+      )}
+      {Array.isArray(data.subtasks) && data.subtasks.length > 0 ? (
+        <div className="research-needs">
+          {data.subtasks.map((subtask, idx) => (
+            <div key={idx} className="research-need-card">
+              <h3>Subtask {idx + 1}</h3>
+              <p>{subtask}</p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="no-data">No subtasks were generated for the root question.</p>
+      )}
+      {data.composition_explanation && (
+        <div className="info-section">
+          <h3>Composition Explanation</h3>
+          <p>{data.composition_explanation}</p>
+        </div>
+      )}
+    </div>
+  );
+
+  // Render recursive DAG step
+  const renderRecursiveGraph = () => {
+    const nodes = data.nodes || {};
+    const rootId = data.root_id;
+
+    if (!rootId || !nodes[rootId]) {
+      return (
+        <div className="step-content">
+          <h2>Recursive Research DAG</h2>
+          <p className="no-data">
+            No graph structure found for this run. Showing raw data instead.
+          </p>
+          <pre>{JSON.stringify(data, null, 2)}</pre>
+        </div>
+      );
+    }
+
+    const renderNode = (nodeId, visited) => {
+      const node = nodes[nodeId];
+      if (!node) return null;
+
+      const nextVisited = new Set(visited);
+      const alreadyVisited = nextVisited.has(nodeId);
+      nextVisited.add(nodeId);
+
+      const status = (node.status || "pending").toLowerCase();
+      const isReused =
+        Array.isArray(node.parents) && node.parents.length > 1 && nodeId !== rootId;
+      const isRoot = nodeId === rootId;
+      const isLeaf =
+        (!Array.isArray(node.children) || node.children.length === 0) &&
+        (Array.isArray(node.subtasks) ? node.subtasks.length === 0 : true);
+
+      return (
+        <li key={nodeId}>
+          <div
+            className={`graph-node graph-node-status-${status} ${
+              isRoot ? "graph-node-root" : ""
+            } ${isLeaf ? "graph-node-leaf" : ""}`}
+          >
+            <div className="graph-node-header">
+              <span className="graph-node-title">{node.question}</span>
+              <span className={`graph-node-status-pill status-${status}`}>
+                {status}
+              </span>
+              {isRoot && (
+                <span className="graph-node-badge graph-node-badge-root">
+                  Root
+                </span>
+              )}
+              {isReused && (
+                <span className="graph-node-badge">Reused</span>
+              )}
+            </div>
+            <div className="graph-node-meta">
+              <span>Depth: {node.depth ?? 0}</span>
+              {node.is_answerable !== undefined && (
+                <span>
+                  Answerable: {node.is_answerable ? "Yes" : "No"}
+                </span>
+              )}
+              {Array.isArray(node.subtasks) && node.subtasks.length > 0 && (
+                <span>Subtasks: {node.subtasks.length}</span>
+              )}
+            </div>
+          </div>
+          {!alreadyVisited &&
+            Array.isArray(node.children) &&
+            node.children.length > 0 && (
+              <ul className="graph-children">
+                {node.children.map((childId) =>
+                  renderNode(childId, nextVisited)
+                )}
+              </ul>
+            )}
+        </li>
+      );
+    };
+
+    return (
+      <div className="step-content">
+        <h2>Recursive Research DAG</h2>
+
+        {stepData.metadata && (
+          <div className="metadata-section">
+            <h3>Graph Summary</h3>
+            <div className="metadata-grid">
+              {stepData.metadata.total_nodes !== undefined && (
+                <div className="metadata-item">
+                  <span className="label">Total Nodes:</span>
+                  <span className="value">
+                    {stepData.metadata.total_nodes}
+                  </span>
+                </div>
+              )}
+              {stepData.metadata.max_depth !== undefined && (
+                <div className="metadata-item">
+                  <span className="label">Max Depth:</span>
+                  <span className="value">
+                    {stepData.metadata.max_depth}
+                  </span>
+                </div>
+              )}
+              {stepData.metadata.max_nodes !== undefined && (
+                <div className="metadata-item">
+                  <span className="label">Node Budget:</span>
+                  <span className="value">
+                    {stepData.metadata.max_nodes}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="graph-tree">
+          <ul className="graph-root">
+            {renderNode(rootId, new Set())}
+          </ul>
+        </div>
+      </div>
+    );
+  };
+
   // Route to appropriate renderer based on step name
   const renderStepContent = () => {
     switch (stepInfo.step_name) {
@@ -311,6 +525,14 @@ export function StepViewer({ stepData, stepInfo }) {
         return renderReportGeneration();
       case "05_final_report":
         return renderFinalReport();
+      case "00_root_literature_search":
+        return renderRootLiteratureSearch();
+      case "01_root_is_answerable":
+        return renderRootIsAnswerable();
+      case "02_root_subtask_generation":
+        return renderRootSubtaskGeneration();
+      case "recursive_graph":
+        return renderRecursiveGraph();
       default:
         return (
           <div className="step-content">

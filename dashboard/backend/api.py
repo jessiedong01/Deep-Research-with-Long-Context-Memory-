@@ -3,6 +3,7 @@ FastAPI application for the dashboard backend.
 """
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pathlib import Path
 from typing import Optional
 
 from .models import (
@@ -12,6 +13,7 @@ from .models import (
     StartRunRequest,
     StartRunResponse,
     RunStatus,
+    GraphResponse,
 )
 from .scanner import LogScanner
 from .runner import get_runner
@@ -41,6 +43,33 @@ app.add_middleware(
 # Initialize scanner and runner
 scanner = LogScanner()
 runner = get_runner()
+
+
+def _get_current_node_id(run_id: str) -> Optional[str]:
+    """Return the id of the node that is currently being explored, if available."""
+    # Reconstruct the run directory in the logs folder.
+    run_dir = scanner.logs_dir / run_id  # type: ignore[attr-defined]
+    current_file = run_dir / "current_node.json"
+
+    if not current_file.exists():
+        return None
+
+    try:
+        import json
+
+        with current_file.open("r") as f:
+            payload = json.load(f)
+    except Exception:
+        return None
+
+    # Handle both bare and logger-wrapped formats.
+    if isinstance(payload, dict):
+        data = payload.get("data", payload)
+        node_id = data.get("current_node_id")
+        if isinstance(node_id, str):
+            return node_id
+
+    return None
 
 
 @app.get("/")
@@ -103,13 +132,53 @@ async def get_step_detail(run_id: str, step_name: str):
     return StepDetailResponse(step_info=step_info, data=step_data)
 
 
+@app.get("/api/runs/{run_id}/graph", response_model=GraphResponse)
+async def get_run_graph(run_id: str):
+    """Get the recursive research graph for a specific run."""
+    # Load the saved recursive_graph intermediate result
+    step_data = scanner.get_step_data(run_id, "recursive_graph")
+    if not step_data:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Recursive graph not found for run {run_id}. "
+            "Make sure the run completed with collect_graph enabled.",
+        )
+
+    data = step_data.get("data") or {}
+    root_id = data.get("root_id")
+    nodes = data.get("nodes")
+
+    if not isinstance(root_id, str) or not isinstance(nodes, dict):
+        raise HTTPException(
+            status_code=500,
+            detail=f"Malformed recursive graph data for run {run_id}",
+        )
+
+    # Start with any metadata saved alongside the graph
+    metadata = step_data.get("metadata") or {}
+    if not isinstance(metadata, dict):
+        metadata = {}
+
+    # Enrich metadata with the current node id if available
+    current_node_id = _get_current_node_id(run_id)
+    if current_node_id:
+        metadata = {**metadata, "current_node_id": current_node_id}
+
+    return GraphResponse(
+        graph={"root_id": root_id, "nodes": nodes},
+        metadata=metadata or None,
+    )
+
+
 @app.post("/api/runs/start", response_model=StartRunResponse)
 async def start_run(request: StartRunRequest):
     """Start a new pipeline run."""
     try:
         run_id = await runner.start_run(
             topic=request.topic,
-            max_retriever_calls=request.max_retriever_calls
+            max_retriever_calls=request.max_retriever_calls,
+            max_depth=request.max_depth,
+            max_nodes=request.max_nodes,
         )
         
         return StartRunResponse(

@@ -108,6 +108,223 @@ class RetrievedDocument:
         )
 
 
+def _normalize_question(question: str) -> str:
+    """Normalize a research question/task string for node identity and reuse.
+
+    The goal is to aggressively collapse superficial differences so that
+    semantically identical questions map to the same key while still being
+    deterministic and cheap to compute.
+    """
+    # Lowercase, strip, and collapse all internal whitespace
+    return " ".join(question.strip().lower().split())
+
+
+@dataclass
+class ResearchNode:
+    """Node in a recursive research DAG.
+
+    Each node represents a single research task (question) along with:
+    - Links to parent/child nodes in the DAG
+    - Status and depth within the exploration
+    - Literature search results and final report (when available)
+    - Subtasks and an explanation for how to compose them
+    """
+
+    id: str
+    question: str
+    parents: list[str] = field(default_factory=list)
+    children: list[str] = field(default_factory=list)
+
+    # Structural / control metadata
+    status: str = "pending"  # pending | in_progress | complete | failed
+    depth: int = 0
+    is_answerable: bool | None = None
+    normalized_question: str | None = None
+
+    # Results attached to this node
+    literature_writeup: str | None = None
+    report: str | None = None
+    cited_documents: list[RetrievedDocument] = field(default_factory=list)
+
+    # Decomposition information
+    subtasks: list[str] = field(default_factory=list)
+    composition_explanation: str | None = None
+
+    # If this node's report or results were reused from another node,
+    # this field can point to the canonical node id.
+    reused_from_node_id: str | None = None
+
+    # Free-form metadata for debugging, budgeting, etc.
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert the node to a dictionary suitable for JSON serialization."""
+        return {
+            "id": self.id,
+            "question": self.question,
+            "parents": list(self.parents),
+            "children": list(self.children),
+            "status": self.status,
+            "depth": self.depth,
+            "is_answerable": self.is_answerable,
+            "normalized_question": self.normalized_question
+            or _normalize_question(self.question),
+            "literature_writeup": self.literature_writeup,
+            "report": self.report,
+            "cited_documents": [doc.to_dict() for doc in self.cited_documents],
+            "subtasks": list(self.subtasks),
+            "composition_explanation": self.composition_explanation,
+            "reused_from_node_id": self.reused_from_node_id,
+            "metadata": dict(self.metadata),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ResearchNode":
+        """Reconstruct a ResearchNode from a dictionary representation."""
+        cited_docs_data = data.get("cited_documents", [])
+        cited_documents = [
+            RetrievedDocument.from_dict(doc) for doc in cited_docs_data
+        ]
+
+        return cls(
+            id=data["id"],
+            question=data["question"],
+            parents=list(data.get("parents", [])),
+            children=list(data.get("children", [])),
+            status=data.get("status", "pending"),
+            depth=data.get("depth", 0),
+            is_answerable=data.get("is_answerable"),
+            normalized_question=data.get("normalized_question"),
+            literature_writeup=data.get("literature_writeup"),
+            report=data.get("report"),
+            cited_documents=cited_documents,
+            subtasks=list(data.get("subtasks", [])),
+            composition_explanation=data.get("composition_explanation"),
+            reused_from_node_id=data.get("reused_from_node_id"),
+            metadata=dict(data.get("metadata", {})),
+        )
+
+
+@dataclass
+class ResearchGraph:
+    """DAG of research nodes for a single presearcher run.
+
+    The graph ensures:
+    - At most one node per normalized question (for reuse across branches)
+    - Simple parent/child relationships to support visualization
+    """
+
+    nodes: dict[str, ResearchNode] = field(default_factory=dict)
+    root_id: str | None = None
+
+    # Internal index from normalized question -> node id for fast reuse.
+    _question_index: dict[str, str] = field(
+        default_factory=dict, repr=False, compare=False
+    )
+
+    def _next_node_id(self) -> str:
+        """Generate a simple, human-readable node id."""
+        return f"node_{len(self.nodes) + 1}"
+
+    def get_or_create_node(
+        self,
+        question: str,
+        parent_id: str | None = None,
+        depth: int = 0,
+    ) -> ResearchNode:
+        """Retrieve an existing node for a question or create a new one.
+
+        If a node already exists for the normalized question, it will be reused
+        and, if a parent_id is provided, linked into the DAG.
+        """
+        normalized = _normalize_question(question)
+
+        existing_id = self._question_index.get(normalized)
+        if existing_id is not None:
+            node = self.nodes[existing_id]
+            # Attach parent/child relationship if needed
+            if parent_id is not None and parent_id not in node.parents:
+                node.parents.append(parent_id)
+                parent = self.nodes.get(parent_id)
+                if parent is not None and existing_id not in parent.children:
+                    parent.children.append(existing_id)
+            return node
+
+        node_id = self._next_node_id()
+        node = ResearchNode(
+            id=node_id,
+            question=question,
+            parents=[parent_id] if parent_id is not None else [],
+            children=[],
+            status="pending",
+            depth=depth,
+            is_answerable=None,
+            normalized_question=normalized,
+            literature_writeup=None,
+            report=None,
+            cited_documents=[],
+            subtasks=[],
+            composition_explanation=None,
+            reused_from_node_id=None,
+            metadata={},
+        )
+
+        self.nodes[node_id] = node
+        self._question_index[normalized] = node_id
+
+        if parent_id is not None:
+            parent = self.nodes.get(parent_id)
+            if parent is not None and node_id not in parent.children:
+                parent.children.append(node_id)
+
+        if self.root_id is None:
+            self.root_id = node_id
+
+        return node
+
+    def add_edge(self, parent_id: str, child_id: str) -> None:
+        """Add a parent/child relationship between two existing nodes."""
+        if parent_id == child_id:
+            return
+
+        parent = self.nodes.get(parent_id)
+        child = self.nodes.get(child_id)
+        if parent is None or child is None:
+            return
+
+        if child_id not in parent.children:
+            parent.children.append(child_id)
+        if parent_id not in child.parents:
+            child.parents.append(parent_id)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the entire graph to a JSON-serializable dictionary."""
+        return {
+            "root_id": self.root_id,
+            "nodes": {node_id: node.to_dict() for node_id, node in self.nodes.items()},
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ResearchGraph":
+        """Reconstruct a ResearchGraph from a dictionary representation."""
+        nodes_data = data.get("nodes", {})
+        nodes: dict[str, ResearchNode] = {}
+        question_index: dict[str, str] = {}
+
+        for node_id, node_dict in nodes_data.items():
+            node = ResearchNode.from_dict(node_dict)
+            nodes[node_id] = node
+            normalized = node.normalized_question or _normalize_question(node.question)
+            question_index[normalized] = node_id
+
+        graph = cls(
+            nodes=nodes,
+            root_id=data.get("root_id"),
+        )
+        graph._question_index = question_index
+        return graph
+
+
 @dataclass(init=False)
 class RagRequest:
     """Request object for RAG (Retrieval-Augmented Generation) service.
@@ -248,6 +465,19 @@ class PresearcherAgentRequest:
     guideline: str = "Conduct a survey. Stop when information gain is low or hit the budget"
     with_synthesis: bool = True
 
+    # Recursive DAG controls
+    max_depth: int = 2
+    """Maximum recursion depth for the research DAG (root is depth 0)."""
+
+    max_nodes: int = 50
+    """Hard limit on the total number of nodes in the ResearchGraph."""
+
+    reuse_existing_nodes: bool = True
+    """Whether to reuse existing nodes for identical normalized questions."""
+
+    collect_graph: bool = True
+    """Whether to build and return the full ResearchGraph structure."""
+
 @dataclass
 class LiteratureSearchAgentRequest:
     """Request object for Literature Search Agent service.
@@ -290,6 +520,10 @@ class PresearcherAgentResponse:
     rag_responses: list[RagResponse] = field(default_factory=list)
     misc: dict[str, Any] = field(default_factory=dict)
 
+    # Recursive DAG output (optional for backward compatibility)
+    root_node_id: str | None = None
+    graph: ResearchGraph | None = None
+
     def _serialize_item(self, item: Any) -> Any:
         """Recursively serialize an item, converting objects with to_dict() methods."""
         if hasattr(item, 'to_dict') and callable(item.to_dict):
@@ -309,6 +543,9 @@ class PresearcherAgentResponse:
         """
         # Recursively convert misc field, handling nested objects with to_dict() methods
         serialized_misc = self._serialize_item(self.misc)
+        serialized_graph = (
+            self._serialize_item(self.graph) if self.graph is not None else None
+        )
 
         return {
             "topic": self.topic,
@@ -316,7 +553,9 @@ class PresearcherAgentResponse:
             "writeup": self.writeup,
             "cited_documents": [doc.to_dict() for doc in self.cited_documents],
             "rag_responses": [rag_response.to_dict() for rag_response in self.rag_responses],
-            "misc": serialized_misc
+            "misc": serialized_misc,
+            "root_node_id": self.root_node_id,
+            "graph": serialized_graph,
         }
 
     @classmethod
@@ -340,12 +579,23 @@ class PresearcherAgentResponse:
             )
             rag_responses.append(rag_response)
 
+        graph_data = data.get("graph")
+        graph: ResearchGraph | None = None
+        if isinstance(graph_data, dict):
+            try:
+                graph = ResearchGraph.from_dict(graph_data)
+            except Exception:
+                graph = None
+
         return cls(
             topic=data['topic'],
             guideline=data.get('guideline', ''),  # Add missing guideline field
             writeup=data['writeup'],
             cited_documents=data.get('cited_documents', []),
-            rag_responses=rag_responses
+            rag_responses=rag_responses,
+            misc=data.get("misc", {}),
+            root_node_id=data.get("root_node_id"),
+            graph=graph,
         )
 
 @dataclass

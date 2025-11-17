@@ -62,7 +62,13 @@ class PipelineRunner:
         for ws in dead_connections:
             self.unregister_websocket(run_id, ws)
     
-    async def start_run(self, topic: str, max_retriever_calls: int = 1) -> str:
+    async def start_run(
+        self,
+        topic: str,
+        max_retriever_calls: int = 1,
+        max_depth: int = 2,
+        max_nodes: int = 50,
+    ) -> str:
         """
         Start a new pipeline run.
         
@@ -82,11 +88,23 @@ class PipelineRunner:
             "status": RunStatus.RUNNING,
             "topic": topic,
             "started_at": datetime.now(),
-            "logger": logger
+            "logger": logger,
+            "max_retriever_calls": max_retriever_calls,
+            "max_depth": max_depth,
+            "max_nodes": max_nodes,
         }
         
         # Start the pipeline in background
-        asyncio.create_task(self._run_pipeline(run_id, topic, max_retriever_calls, logger))
+        asyncio.create_task(
+            self._run_pipeline(
+                run_id=run_id,
+                topic=topic,
+                max_retriever_calls=max_retriever_calls,
+                max_depth=max_depth,
+                max_nodes=max_nodes,
+                logger=logger,
+            )
+        )
         
         return run_id
     
@@ -95,7 +113,9 @@ class PipelineRunner:
         run_id: str,
         topic: str,
         max_retriever_calls: int,
-        logger
+        max_depth: int,
+        max_nodes: int,
+        logger,
     ):
         """Execute the pipeline and broadcast updates."""
         try:
@@ -118,7 +138,12 @@ class PipelineRunner:
             ))
             
             logger.info(f"User research task: {topic}")
-            logger.info(f"Pipeline configuration: max_retriever_calls={max_retriever_calls}")
+            logger.info(
+                f"Pipeline configuration: "
+                f"max_retriever_calls={max_retriever_calls}, "
+                f"max_depth={max_depth}, "
+                f"max_nodes={max_nodes}"
+            )
             
             # Run the presearcher pipeline
             await self.broadcast_message(run_id, WebSocketMessage(
@@ -128,7 +153,12 @@ class PipelineRunner:
             ))
             
             presearcher_response: PresearcherAgentResponse = await presearcher_agent.aforward(
-                PresearcherAgentRequest(topic=topic, max_retriever_calls=max_retriever_calls)
+                PresearcherAgentRequest(
+                    topic=topic,
+                    max_retriever_calls=max_retriever_calls,
+                    max_depth=max_depth,
+                    max_nodes=max_nodes,
+                )
             )
             
             # Save results
