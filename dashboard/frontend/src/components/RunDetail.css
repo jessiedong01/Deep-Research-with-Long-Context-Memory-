@@ -335,6 +335,18 @@
   letter-spacing: 0.5px;
 }
 
+.section-description {
+  margin: 0 0 1rem 0;
+  font-size: 0.8rem;
+  color: #6b7280;
+  line-height: 1.5;
+  font-style: italic;
+  padding: 0.5rem 0.75rem;
+  background: #ffffff;
+  border-left: 3px solid #3b82f6;
+  border-radius: 4px;
+}
+
 .node-question-full {
   margin: 0;
   font-size: 1rem;

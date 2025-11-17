@@ -381,7 +381,10 @@ export function RunDetail() {
 
                     {selectedNode.literature_writeup && (
                       <div className="node-detail-section">
-                        <h4>Literature Writeup</h4>
+                        <h4>Literature Writeup (Before Subtasks)</h4>
+                        <p className="section-description">
+                          Initial research synthesis from literature search, generated before decomposing into subtasks.
+                        </p>
                         <div className="node-markdown-content">
                           <ReactMarkdown>
                             {selectedNode.literature_writeup}
@@ -398,6 +401,21 @@ export function RunDetail() {
                             <li key={index}>{subtask}</li>
                           ))}
                         </ul>
+                      </div>
+                    )}
+
+                    {selectedNode.report && (
+                      <div className="node-detail-section">
+                        <h4>Final Report (After Subtasks Complete)</h4>
+                        <p className="section-description">
+                          Polished, structured report synthesized after all child nodes completed exploration. 
+                          Includes key insights, thesis, and comprehensive findings.
+                        </p>
+                        <div className="node-markdown-content">
+                          <ReactMarkdown>
+                            {selectedNode.report}
+                          </ReactMarkdown>
+                        </div>
                       </div>
                     )}
 
