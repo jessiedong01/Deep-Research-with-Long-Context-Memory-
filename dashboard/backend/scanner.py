@@ -121,6 +121,7 @@ class LogScanner:
             max_retriever_calls = None
             max_depth = None
             max_nodes = None
+            max_subtasks = None
             run_config_file = run_dir / "00_run_config.json"
             if run_config_file.exists():
                 try:
@@ -130,6 +131,7 @@ class LogScanner:
                     max_retriever_calls = cfg.get("max_retriever_calls")
                     max_depth = cfg.get("max_depth")
                     max_nodes = cfg.get("max_nodes")
+                    max_subtasks = cfg.get("max_subtasks")
                 except Exception as e:
                     print(f"Error reading run config from {run_config_file}: {e}")
             
@@ -157,9 +159,10 @@ class LogScanner:
                 completed_at=completed_at,
                 duration_seconds=duration_seconds,
                 current_step=current_step,
-                 max_retriever_calls=max_retriever_calls,
-                 max_depth=max_depth,
-                 max_nodes=max_nodes,
+                max_retriever_calls=max_retriever_calls,
+                max_depth=max_depth,
+                max_nodes=max_nodes,
+                max_subtasks=max_subtasks,
                 steps=steps
             )
             

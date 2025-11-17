@@ -68,6 +68,7 @@ class PipelineRunner:
         max_retriever_calls: int = 1,
         max_depth: int = 2,
         max_nodes: int = 50,
+        max_subtasks: int = 10,
     ) -> str:
         """
         Start a new pipeline run.
@@ -75,6 +76,9 @@ class PipelineRunner:
         Args:
             topic: The research topic
             max_retriever_calls: Maximum number of retriever calls
+            max_depth: Maximum recursion depth
+            max_nodes: Maximum total nodes in the graph
+            max_subtasks: Maximum subtasks per parent node
             
         Returns:
             run_id: The ID of the started run
@@ -92,6 +96,7 @@ class PipelineRunner:
             "max_retriever_calls": max_retriever_calls,
             "max_depth": max_depth,
             "max_nodes": max_nodes,
+            "max_subtasks": max_subtasks,
         }
         
         # Start the pipeline in background
@@ -102,6 +107,7 @@ class PipelineRunner:
                 max_retriever_calls=max_retriever_calls,
                 max_depth=max_depth,
                 max_nodes=max_nodes,
+                max_subtasks=max_subtasks,
                 logger=logger,
             )
         )
@@ -115,6 +121,7 @@ class PipelineRunner:
         max_retriever_calls: int,
         max_depth: int,
         max_nodes: int,
+        max_subtasks: int,
         logger,
     ):
         """Execute the pipeline and broadcast updates."""
@@ -142,7 +149,8 @@ class PipelineRunner:
                 f"Pipeline configuration: "
                 f"max_retriever_calls={max_retriever_calls}, "
                 f"max_depth={max_depth}, "
-                f"max_nodes={max_nodes}"
+                f"max_nodes={max_nodes}, "
+                f"max_subtasks={max_subtasks}"
             )
             
             # Run the presearcher pipeline
@@ -158,6 +166,7 @@ class PipelineRunner:
                     max_retriever_calls=max_retriever_calls,
                     max_depth=max_depth,
                     max_nodes=max_nodes,
+                    max_subtasks=max_subtasks,
                 )
             )
             

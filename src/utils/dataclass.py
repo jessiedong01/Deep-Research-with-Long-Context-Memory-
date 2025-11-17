@@ -472,6 +472,9 @@ class PresearcherAgentRequest:
     max_nodes: int = 50
     """Hard limit on the total number of nodes in the ResearchGraph."""
 
+    max_subtasks: int = 10
+    """Maximum number of subtasks (child nodes) to generate per parent node."""
+
     reuse_existing_nodes: bool = True
     """Whether to reuse existing nodes for identical normalized questions."""
 

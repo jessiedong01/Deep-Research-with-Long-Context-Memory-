@@ -46,6 +46,7 @@ class RunMetadata(BaseModel):
     max_retriever_calls: Optional[int] = None
     max_depth: Optional[int] = None
     max_nodes: Optional[int] = None
+    max_subtasks: Optional[int] = None
     steps: list[StepInfo] = Field(default_factory=list)
 
 
@@ -88,6 +89,7 @@ class StartRunRequest(BaseModel):
     max_retriever_calls: int = 1
     max_depth: int = 2
     max_nodes: int = 50
+    max_subtasks: int = 10
 
 
 class StartRunResponse(BaseModel):

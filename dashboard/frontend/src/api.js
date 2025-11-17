@@ -41,7 +41,7 @@ export const api = {
   /**
    * Start a new pipeline run
    */
-  async startRun(topic, maxRetrieverCalls = 1, maxDepth = 2, maxNodes = 50) {
+  async startRun(topic, maxRetrieverCalls = 1, maxDepth = 2, maxNodes = 50, maxSubtasks = 10) {
     const response = await fetch(`${API_BASE_URL}/api/runs/start`, {
       method: 'POST',
       headers: {
@@ -52,6 +52,7 @@ export const api = {
         max_retriever_calls: maxRetrieverCalls,
         max_depth: maxDepth,
         max_nodes: maxNodes,
+        max_subtasks: maxSubtasks,
       }),
     });
     if (!response.ok) {

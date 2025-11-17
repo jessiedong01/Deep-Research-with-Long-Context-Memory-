@@ -13,6 +13,7 @@ export function NewRunForm() {
   const [maxRetrieverCalls, setMaxRetrieverCalls] = useState(1);
   const [maxDepth, setMaxDepth] = useState(2);
   const [maxNodes, setMaxNodes] = useState(50);
+  const [maxSubtasks, setMaxSubtasks] = useState(10);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [runId, setRunId] = useState(null);
@@ -35,7 +36,8 @@ export function NewRunForm() {
         topic,
         maxRetrieverCalls,
         maxDepth,
-        maxNodes
+        maxNodes,
+        maxSubtasks
       );
       setRunId(response.run_id);
       
@@ -144,6 +146,30 @@ export function NewRunForm() {
               />
               <span className="form-help">
                 Global cap on number of research tasks explored in the DAG.
+              </span>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="maxSubtasks">
+                Max Subtasks per Node
+              </label>
+              <input
+                type="number"
+                id="maxSubtasks"
+                value={maxSubtasks}
+                onChange={(e) =>
+                  setMaxSubtasks(
+                    Number.isNaN(parseInt(e.target.value, 10))
+                      ? 1
+                      : parseInt(e.target.value, 10)
+                  )
+                }
+                min={1}
+                max={20}
+                disabled={isSubmitting}
+              />
+              <span className="form-help">
+                Maximum number of child nodes (beams) to generate per parent node (1-20).
               </span>
             </div>
 

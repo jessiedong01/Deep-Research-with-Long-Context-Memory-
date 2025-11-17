@@ -195,6 +195,9 @@ export function RunDetail() {
             {typeof runDetail.metadata.max_nodes === "number" && (
               <span>Max Nodes: {runDetail.metadata.max_nodes}</span>
             )}
+            {typeof runDetail.metadata.max_subtasks === "number" && (
+              <span>Max Subtasks: {runDetail.metadata.max_subtasks}</span>
+            )}
           </div>
         </div>
       </div>
@@ -249,6 +252,12 @@ export function RunDetail() {
               <div className="run-summary-item">
                 <span className="label">Max Nodes</span>
                 <span className="value">{runDetail.metadata.max_nodes}</span>
+              </div>
+            )}
+            {typeof runDetail.metadata.max_subtasks === "number" && (
+              <div className="run-summary-item">
+                <span className="label">Max Subtasks</span>
+                <span className="value">{runDetail.metadata.max_subtasks}</span>
               </div>
             )}
             {graph?.metadata && (

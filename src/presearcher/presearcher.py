@@ -57,6 +57,7 @@ class PresearcherAgent:
                 "max_retriever_calls": request.max_retriever_calls,
                 "max_depth": request.max_depth,
                 "max_nodes": request.max_nodes,
+                "max_subtasks": request.max_subtasks,
             },
         )
 
@@ -201,7 +202,7 @@ class PresearcherAgent:
             try:
                 subtask_generation_response = await self.subtask_generation_agent.aforward(
                     research_task=node.question,
-                    max_subtasks=10,
+                    max_subtasks=request.max_subtasks,
                     lm=self.lm,
                 )
                 subtasks = list(getattr(subtask_generation_response, "subtasks", []) or [])

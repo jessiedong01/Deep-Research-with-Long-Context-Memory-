@@ -179,6 +179,7 @@ async def start_run(request: StartRunRequest):
             max_retriever_calls=request.max_retriever_calls,
             max_depth=request.max_depth,
             max_nodes=request.max_nodes,
+            max_subtasks=request.max_subtasks,
         )
         
         return StartRunResponse(
