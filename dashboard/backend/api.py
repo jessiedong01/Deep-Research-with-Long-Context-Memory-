@@ -140,35 +140,51 @@ async def get_step_detail(run_id: str, step_name: str):
 
 @app.get("/api/runs/{run_id}/graph", response_model=GraphResponse)
 async def get_run_graph(run_id: str):
-    """Get the recursive research graph for a specific run."""
-    # Load the saved recursive_graph intermediate result
-    step_data = scanner.get_step_data(run_id, "recursive_graph")
-    if not step_data:
+    """Get the freshest research graph snapshot for a specific run."""
+    run_metadata = scanner.get_run(run_id)
+    run_status = run_metadata.status if run_metadata else None
+
+    snapshot_data = scanner.get_step_data(run_id, "dag_processing_snapshot")
+    final_data = scanner.get_step_data(run_id, "recursive_graph")
+
+    selected = None
+    source = "final"
+
+    if snapshot_data and run_status == RunStatus.RUNNING:
+        selected = snapshot_data
+        source = "snapshot"
+    elif final_data:
+        selected = final_data
+        source = "final"
+    elif snapshot_data:
+        # Fallback to snapshot even if run finished but final file missing
+        selected = snapshot_data
+        source = "snapshot"
+    else:
         raise HTTPException(
             status_code=404,
-            detail=f"Recursive graph not found for run {run_id}. "
-            "Make sure the run completed with collect_graph enabled.",
+            detail=f"No graph snapshots found for run {run_id}.",
         )
 
-    data = step_data.get("data") or {}
+    data = selected.get("data") or {}
     root_id = data.get("root_id")
     nodes = data.get("nodes")
 
     if not isinstance(root_id, str) or not isinstance(nodes, dict):
         raise HTTPException(
             status_code=500,
-            detail=f"Malformed recursive graph data for run {run_id}",
+            detail=f"Malformed graph data for run {run_id}",
         )
 
-    # Start with any metadata saved alongside the graph
-    metadata = step_data.get("metadata") or {}
+    metadata = selected.get("metadata") or {}
     if not isinstance(metadata, dict):
         metadata = {}
 
-    # Enrich metadata with the current node id if available
+    metadata = {**metadata, "graph_source": source}
+
     current_node_id = _get_current_node_id(run_id)
     if current_node_id:
-        metadata = {**metadata, "current_node_id": current_node_id}
+        metadata["current_node_id"] = current_node_id
 
     return GraphResponse(
         graph={"root_id": root_id, "nodes": nodes},

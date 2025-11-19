@@ -114,7 +114,11 @@ class FinalReportGenerator:
         self.outline_generator = dspy.Predict(OutlineFromDAGSignature)
         self.report_generator = dspy.Predict(ReportFromDAGSignature)
     
-    async def generate_report(self, graph: ResearchGraph) -> tuple[str, list[RetrievedDocument]]:
+    async def generate_report(
+        self,
+        graph: ResearchGraph,
+        node_results: dict[str, str],
+    ) -> tuple[str, list[RetrievedDocument]]:
         """Generate a final report from a processed DAG.
         
         Args:
@@ -138,7 +142,7 @@ class FinalReportGenerator:
         self.logger.debug("Built DAG structure summary")
         
         # Step 2: Collect all DAG results
-        dag_results = self._collect_dag_results(graph)
+        dag_results = self._collect_dag_results(graph, node_results)
         self.logger.debug(f"Collected results from {len(graph.nodes)} nodes")
         
         # Step 3: Collect all citations
@@ -223,7 +227,11 @@ class FinalReportGenerator:
         
         return "\n".join(lines)
     
-    def _collect_dag_results(self, graph: ResearchGraph) -> str:
+    def _collect_dag_results(
+        self,
+        graph: ResearchGraph,
+        node_results: dict[str, str],
+    ) -> str:
         """Collect all node results into a formatted string.
         
         Args:
@@ -244,7 +252,8 @@ class FinalReportGenerator:
             result = f"Node {node_id} (depth={node.depth}):\n"
             result += f"Question: {node.question}\n"
             result += f"Format: {node.expected_output_format}\n"
-            result += f"Answer:\n{node.report or 'No answer'}\n"
+            answer_text = node_results.get(node_id, "No answer available")
+            result += f"Answer:\n{answer_text}\n"
             results.append(result)
         
         return "\n---\n\n".join(results)

@@ -515,7 +515,7 @@ class TestResearchGraph:
 
         assert restored.root_id == graph.root_id
         assert set(restored.nodes.keys()) == set(graph.nodes.keys())
-    
+
     def test_graph_with_new_node_fields(self):
         """Test graph serialization with nodes containing new fields."""
         graph = ResearchGraph()

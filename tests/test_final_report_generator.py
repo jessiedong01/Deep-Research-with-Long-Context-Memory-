@@ -117,7 +117,11 @@ class TestFinalReportGenerator:
         generator = FinalReportGenerator(lm=lm)
         
         graph = self._create_simple_processed_graph()
-        results = generator._collect_dag_results(graph)
+        node_results = {
+            node_id: node.report or f"Answer for {node_id}"
+            for node_id, node in graph.nodes.items()
+        }
+        results = generator._collect_dag_results(graph, node_results)
         
         assert "Should we adopt renewable energy?" in results
         assert "Environmental benefits?" in results
@@ -176,7 +180,11 @@ class TestFinalReportGenerator:
         
         graph = self._create_simple_processed_graph()
         
-        report, citations = await generator.generate_report(graph)
+        node_results = {
+            node_id: node.report or f"Answer for {node_id}"
+            for node_id, node in graph.nodes.items()
+        }
+        report, citations = await generator.generate_report(graph, node_results)
         
         # Verify report generated
         assert report is not None
@@ -210,7 +218,11 @@ class TestFinalReportGenerator:
         graph = self._create_simple_processed_graph()
         root = graph.nodes[graph.root_id]
         
-        report, _ = await generator.generate_report(graph)
+        node_results = {
+            node_id: node.report or f"Answer for {node_id}"
+            for node_id, node in graph.nodes.items()
+        }
+        report, _ = await generator.generate_report(graph, node_results)
         
         # Report should contain key elements from root answer
         assert "Yes" in report or "renewable energy" in report.lower()

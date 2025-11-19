@@ -102,8 +102,39 @@
 
 .graph-wrapper {
   flex: 1;
-  min-width: 0; /* Allows flex item to shrink below content size */
+  min-width: 0;
   height: 100%;
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+
+.graph-flow-container {
+  flex: 1;
+  min-height: 0;
+}
+
+.graph-refresh-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.65rem 1rem;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 0.8rem;
+  color: #475569;
+}
+
+.graph-refresh-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
 }
 
 .run-summary-panel {
@@ -504,6 +535,56 @@
   color: #6b7280;
   font-style: italic;
 }
+
+.node-citations-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.node-citations-list li {
+  padding: 0.75rem;
+  background: #ffffff;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.citation-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.citation-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.citation-url {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  font-style: italic;
+  word-break: break-all;
+}
+
+.citation-link {
+  font-size: 0.8rem;
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.citation-link:hover {
+  text-decoration: underline;
+}
+
 
 .node-markdown-content a {
   color: #3b82f6;

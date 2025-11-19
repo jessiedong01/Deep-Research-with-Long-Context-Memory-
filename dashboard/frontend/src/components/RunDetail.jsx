@@ -47,7 +47,11 @@ export function RunDetail() {
 
       return () => clearInterval(interval);
     }
-  }, [runDetail?.metadata?.status, runDetail?.metadata?.is_three_phase, graphNotFound]);
+  }, [
+    runDetail?.metadata?.status,
+    runDetail?.metadata?.is_three_phase,
+    graphNotFound,
+  ]);
 
   useEffect(() => {
     // Reset graph not found state when switching runs
@@ -152,6 +156,15 @@ export function RunDetail() {
     return `${mins}m ${secs}s`;
   };
 
+const formatGraphTimestamp = (timestamp) => {
+  if (!timestamp) return null;
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return timestamp;
+  }
+  return date.toLocaleString();
+};
+
   const getStatusBadge = (status) => {
     const statusClass = `status-badge status-${status.toLowerCase()}`;
     return <span className={statusClass}>{status}</span>;
@@ -227,9 +240,8 @@ export function RunDetail() {
         ? rootNode.status.toLowerCase()
         : "pending";
 
-    // Only show report if root node is completed
     if (status === "complete" || status === "completed") {
-      return rootNode.report || rootNode.literature_writeup || null;
+      return rootNode.report || null;
     }
 
     return null;
@@ -251,16 +263,10 @@ export function RunDetail() {
 
     // Determine activity based on node status and context
     if (status === "in_progress") {
-      // Check if it's literature search or synthesis
-      if (node.literature_writeup && !node.report) {
-        return "Synthesizing research findings...";
-      } else if (!node.literature_writeup) {
+      if (!node.children || node.children.length === 0) {
         return "Conducting literature review...";
-      } else if (node.subtasks && node.subtasks.length > 0) {
-        return "Exploring subtasks...";
-      } else {
-        return "Generating report...";
       }
+      return "Synthesizing child results...";
     } else if (status === "pending") {
       return "Queued for exploration...";
     } else if (status === "complete" || status === "completed") {
@@ -387,15 +393,6 @@ export function RunDetail() {
             )}
           </div>
 
-          {/* Show phase progress for three-phase pipeline runs */}
-          {runDetail.metadata.is_three_phase && phaseData && (
-            <PhaseProgress
-              phases={phaseData.phases || []}
-              currentPhase={phaseData.current_phase}
-              isThreePhase={phaseData.is_three_phase}
-            />
-          )}
-
           <div className="activity-indicator-card">
             <h3>Status</h3>
             <div
@@ -431,23 +428,40 @@ export function RunDetail() {
           <h2>Recursive Research Tree</h2>
           <div className="graph-and-details-container">
             <div className="graph-wrapper">
-              {graphLoading ? (
-                <div className="loading">
-                  <div className="spinner"></div>
-                  <p>Loading graph...</p>
+              {graph?.metadata && (
+                <div className="graph-refresh-meta">
+                  <span>
+                    Source:{" "}
+                    {graph.metadata.graph_source === "snapshot"
+                      ? "In-progress snapshot"
+                      : "Final graph"}
+                  </span>
+                  {graph.metadata.snapshot_ts && (
+                    <span>
+                      Updated: {formatGraphTimestamp(graph.metadata.snapshot_ts)}
+                    </span>
+                  )}
                 </div>
-              ) : graphError ? (
-                <div className="error">
-                  <h3>Graph not available</h3>
-                  <p>{graphError}</p>
-                </div>
-              ) : (
-                <RecursiveGraphTree
-                  graph={graph?.graph}
-                  currentNodeId={derivedCurrentNodeId}
-                  onNodeClick={setSelectedNode}
-                />
               )}
+              <div className="graph-flow-container">
+                {graphLoading ? (
+                  <div className="loading">
+                    <div className="spinner"></div>
+                    <p>Loading graph...</p>
+                  </div>
+                ) : graphError ? (
+                  <div className="error">
+                    <h3>Graph not available</h3>
+                    <p>{graphError}</p>
+                  </div>
+                ) : (
+                  <RecursiveGraphTree
+                    graph={graph?.graph}
+                    currentNodeId={derivedCurrentNodeId}
+                    onNodeClick={setSelectedNode}
+                  />
+                )}
+              </div>
             </div>
 
             <div className="node-detail-sidebar">
@@ -489,57 +503,75 @@ export function RunDetail() {
                             {selectedNode.depth ?? 0}
                           </span>
                         </div>
-                        {typeof selectedNode.is_answerable === "boolean" && (
-                          <div className="node-metadata-item">
-                            <span className="label">Answerable:</span>
-                            <span className="value">
-                              {selectedNode.is_answerable ? "Yes" : "No"}
-                            </span>
-                          </div>
-                        )}
                       </div>
                     </div>
 
-                    {selectedNode.literature_writeup && (
-                      <div className="node-detail-section">
-                        <h4>Literature Writeup (Before Subtasks)</h4>
-                        <p className="section-description">
-                          Initial research synthesis from literature search,
-                          generated before decomposing into subtasks.
-                        </p>
-                        <div className="node-markdown-content">
-                          <ReactMarkdown>
-                            {selectedNode.literature_writeup}
-                          </ReactMarkdown>
-                        </div>
-                      </div>
-                    )}
+                    {(() => {
+                      const rootId = graph?.graph?.root_id;
+                      const isRootNode =
+                        rootId && selectedNode?.id && selectedNode.id === rootId;
+                      const nodeAnswer =
+                        selectedNode?.metadata?.answer ||
+                        (isRootNode ? selectedNode.report : null);
 
-                    {selectedNode.subtasks &&
-                      selectedNode.subtasks.length > 0 && (
+                      if (!nodeAnswer) {
+                        return (
+                          <div className="node-detail-section">
+                            <p className="section-description">
+                              No textual answer stored for this node yet.
+                            </p>
+                          </div>
+                        );
+                      }
+
+                      return (
                         <div className="node-detail-section">
-                          <h4>Subtasks ({selectedNode.subtasks.length})</h4>
-                          <ul className="node-subtasks-list">
-                            {selectedNode.subtasks.map((subtask, index) => (
-                              <li key={index}>{subtask}</li>
-                            ))}
+                          <h4>{isRootNode ? "Final Report" : "Answer"}</h4>
+                          <p className="section-description">
+                            {isRootNode
+                              ? "Comprehensive synthesis for the full research task."
+                              : "Summary generated for this sub-question."}
+                          </p>
+                          <div className="node-markdown-content">
+                            <ReactMarkdown>{nodeAnswer}</ReactMarkdown>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {Array.isArray(selectedNode.cited_documents) &&
+                      selectedNode.cited_documents.length > 0 && (
+                        <div className="node-detail-section">
+                          <h4>
+                            Sources ({selectedNode.cited_documents.length})
+                          </h4>
+                          <ul className="node-citations-list">
+                            {selectedNode.cited_documents.map((doc, idx) => {
+                              const title = doc.title || doc.url || `Source ${idx + 1}`;
+                              return (
+                                <li key={doc.url || `${selectedNode.id}-doc-${idx}`}>
+                                  <div className="citation-main">
+                                    <span className="citation-title">{title}</span>
+                                    {doc.url && (
+                                      <span className="citation-url">{doc.url}</span>
+                                    )}
+                                    {doc.url && (
+                                      <a
+                                        href={doc.url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="citation-link"
+                                      >
+                                        Visit →
+                                      </a>
+                                    )}
+                                  </div>
+                                </li>
+                              );
+                            })}
                           </ul>
                         </div>
                       )}
-
-                    {selectedNode.report && (
-                      <div className="node-detail-section">
-                        <h4>Final Report (After Subtasks Complete)</h4>
-                        <p className="section-description">
-                          Polished, structured report synthesized after all
-                          child nodes completed exploration. Includes key
-                          insights, thesis, and comprehensive findings.
-                        </p>
-                        <div className="node-markdown-content">
-                          <ReactMarkdown>{selectedNode.report}</ReactMarkdown>
-                        </div>
-                      </div>
-                    )}
 
                     {selectedNode.children &&
                       selectedNode.children.length > 0 && (

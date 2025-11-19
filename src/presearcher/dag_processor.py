@@ -28,11 +28,9 @@ class LeafNodeResearcher(dspy.Signature):
     that strictly adheres to the format requirements.
     
     Format types and requirements:
-    - boolean: Provide "Yes" or "No" followed by a 1-2 sentence justification
-    - short_answer: Provide a concise answer in 1-3 sentences
-    - list: Provide a bullet-point list (use "- " prefix for each item)
-    - table_csv: Provide data in CSV format with clear column headers
-    - report: Provide a detailed written report with proper structure
+    - boolean: Provide "Yes." or "No." followed by a single sentence justification with citations.
+    - short_answer/list/report: Provide 3-5 bullet points (`- ` prefix) summarizing key takeaways with citations.
+    - table_csv/json: Provide structured data (CSV or JSON) with inline citations in headers or cells.
     
     CRITICAL: Preserve all citations from the literature search in [X] format.
     Do not add citations that aren't in the source material.
@@ -73,11 +71,9 @@ class ParentNodeSynthesizer(dspy.Signature):
     5. If child results contradict, acknowledge and explain the contradiction
     
     Format types:
-    - boolean: Yes/No with justification based on synthesis
-    - short_answer: 1-3 sentence synthesis
-    - list: Combined/deduplicated list from children
-    - table_csv: Merged table data
-    - report: Comprehensive synthesis report
+    - boolean: Output \"Yes.\" or \"No.\" plus one bullet with justification and citations.
+    - short_answer/list/report: Output 3-5 bullets combining child findings, each with citations.
+    - table_csv/json: Merge structured data while preserving child citations.
     """
     
     research_task: str = dspy.InputField(
@@ -129,12 +125,63 @@ class DAGProcessor:
         
         self.leaf_researcher = dspy.Predict(LeafNodeResearcher)
         self.parent_synthesizer = dspy.Predict(ParentNodeSynthesizer)
+        self._node_results: dict[str, str] = {}
+    
+    @staticmethod
+    def _normalize_answer(expected_format: str | None, answer: str | None) -> str:
+        """Normalize LLM output into the required concise format with citations preserved."""
+        if not answer:
+            return "No answer available."
+        
+        text = answer.strip()
+        if not text:
+            return "No answer available."
+        
+        fmt = (expected_format or "").lower()
+        
+        if fmt in {"boolean", "yes_no"}:
+            lowered = text.lower()
+            verdict = "Yes"
+            if lowered.startswith("no"):
+                verdict = "No"
+            elif lowered.startswith("yes"):
+                verdict = "Yes"
+            else:
+                # Try to infer by keyword
+                verdict = "Yes" if "yes" in lowered and "no" not in lowered else (
+                    "No" if "no" in lowered and "yes" not in lowered else "Unknown"
+                )
+            
+            remainder = text[len(verdict):].strip(" .:-") if verdict in {"Yes", "No"} else text
+            if not remainder:
+                remainder = "Further evidence pending."
+            return f"{verdict}. {remainder}".strip()
+        
+        if fmt in {"list", "bullet", "report", "short_answer"}:
+            lines = []
+            for line in text.splitlines():
+                cleaned = line.strip(" -•\t")
+                if cleaned:
+                    lines.append(f"- {cleaned}")
+            if not lines:
+                lines = [f"- {text}"]
+            return "\n".join(lines)
+        
+        if fmt in {"table_csv", "csv", "json"}:
+            # Preserve structured content as-is
+            return text
+        
+        # Default fallback to bullet list
+        lines = [f"- {line.strip()}" for line in text.splitlines() if line.strip()]
+        if lines:
+            return "\n".join(lines)
+        return f"- {text}"
     
     async def process_dag(
         self,
         graph: ResearchGraph,
         max_retriever_calls: int = 3,
-    ) -> ResearchGraph:
+    ) -> tuple[ResearchGraph, dict[str, str]]:
         """Process the entire DAG bottom-up.
         
         Args:
@@ -145,6 +192,7 @@ class DAGProcessor:
             The same graph with all nodes processed and answers populated
         """
         self.logger.info("Starting DAG processing")
+        self._node_results = {}
         self.logger.info(f"Total nodes to process: {len(graph.nodes)}")
         
         # Get processing order (leaves to root)
@@ -157,6 +205,11 @@ class DAGProcessor:
         # Process each layer
         for layer_idx, node_ids in enumerate(processing_layers):
             self.logger.info(f"Processing layer {layer_idx} with {len(node_ids)} nodes")
+            
+            # Mark nodes as in_progress and save snapshot BEFORE processing
+            for node_id in node_ids:
+                graph.nodes[node_id].status = "in_progress"
+            self._save_graph_snapshot(graph)
             
             # Process all nodes in this layer in parallel
             tasks = []
@@ -184,7 +237,7 @@ class DAGProcessor:
             }
         )
         
-        return graph
+        return graph, dict(self._node_results)
     
     def _topological_sort_by_layers(self, graph: ResearchGraph) -> list[list[str]]:
         """Sort nodes into layers for bottom-up processing.
@@ -241,31 +294,50 @@ class DAGProcessor:
             max_retriever_calls: Max retriever calls for literature search
         """
         node = graph.nodes[node_id]
-        node.status = "in_progress"
         
         self.logger.debug(f"Processing node {node_id}: {node.question}")
         
+        result_text = ""
         try:
             if not node.children:
                 # Leaf node: conduct literature search and format answer
-                await self._process_leaf_node(node, max_retriever_calls)
+                result_text = await self._process_leaf_node(
+                    node,
+                    max_retriever_calls,
+                )
             else:
                 # Parent node: synthesize child results
-                await self._process_parent_node(graph, node)
+                result_text = await self._process_parent_node(graph, node)
             
+            self._node_results[node_id] = result_text
+            node.metadata = dict(node.metadata)
+            node.metadata["answer"] = result_text
+            if graph.root_id and node_id == graph.root_id:
+                node.report = result_text
+            else:
+                node.report = None
+            node.literature_writeup = None
             node.status = "complete"
             self.logger.debug(f"Node {node_id} complete")
         
         except Exception as e:
             self.logger.error(f"Failed to process node {node_id}: {e}")
             node.status = "failed"
-            node.report = f"ERROR: Processing failed: {str(e)}"
+            error_text = f"ERROR: Processing failed: {str(e)}"
+            self._node_results[node_id] = error_text
+            node.metadata = dict(node.metadata)
+            node.metadata["answer"] = error_text
+            if graph.root_id and node_id == graph.root_id:
+                node.report = error_text
+            else:
+                node.report = None
+            node.literature_writeup = None
     
     async def _process_leaf_node(
         self,
         node: ResearchNode,
         max_retriever_calls: int,
-    ) -> None:
+    ) -> str:
         """Process a leaf node by conducting literature search.
         
         Args:
@@ -284,8 +356,6 @@ class DAGProcessor:
         
         lit_response = await self.literature_search_agent.aforward(lit_request)
         
-        # Store literature results
-        node.literature_writeup = lit_response.writeup
         node.cited_documents = list(lit_response.cited_documents)
         
         # Format answer according to expected format
@@ -300,18 +370,20 @@ class DAGProcessor:
                 lm=self.lm,
             )
             
-            node.report = researcher_result.formatted_answer
+            formatted_answer = researcher_result.formatted_answer
             self.logger.debug(f"Leaf node {node.id}: formatted answer as {node.expected_output_format}")
         
         except Exception as e:
             self.logger.warning(f"Failed to format answer for {node.id}, using raw literature writeup: {e}")
-            node.report = lit_response.writeup
+            formatted_answer = lit_response.writeup or "No answer available"
+        
+        return self._normalize_answer(node.expected_output_format, formatted_answer)
     
     async def _process_parent_node(
         self,
         graph: ResearchGraph,
         node: ResearchNode,
-    ) -> None:
+    ) -> str:
         """Process a parent node by synthesizing child results.
         
         Args:
@@ -327,7 +399,8 @@ class DAGProcessor:
         for i, child_id in enumerate(node.children, 1):
             child = graph.nodes[child_id]
             child_result = f"Child {i}: {child.question}\n"
-            child_result += f"Answer:\n{child.report or 'No answer available'}\n"
+            child_answer = self._node_results.get(child_id, "No answer available")
+            child_result += f"Answer:\n{child_answer}\n"
             child_results_text.append(child_result)
             
             # Collect cited documents from children
@@ -349,16 +422,17 @@ class DAGProcessor:
                 lm=self.lm,
             )
             
-            node.report = synthesis_result.synthesized_answer
+            synthesized = synthesis_result.synthesized_answer
             node.cited_documents = all_cited_docs  # Inherit citations from children
-            
             self.logger.debug(f"Parent node {node.id}: synthesis complete")
         
         except Exception as e:
             self.logger.warning(f"Failed to synthesize for {node.id}, using concatenation: {e}")
             # Fallback: just concatenate child results
-            node.report = f"# {node.question}\n\n" + combined_child_results
+            synthesized = f"# {node.question}\n\n" + combined_child_results
             node.cited_documents = all_cited_docs
+        
+        return self._normalize_answer(node.expected_output_format, synthesized)
     
     def _save_graph_snapshot(self, graph: ResearchGraph) -> None:
         """Save a snapshot of the graph state for real-time visualization.
@@ -377,6 +451,8 @@ class DAGProcessor:
                     "total_nodes": len(graph.nodes),
                     "completed": completed,
                     "in_progress": in_progress,
+                    "source": "snapshot",
+                    "snapshot_ts": datetime.utcnow().isoformat(),
                 }
             )
         except Exception as e:

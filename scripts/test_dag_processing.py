@@ -95,7 +95,10 @@ async def main():
     print("\nProcessing DAG... (this may take several minutes)")
     print("Watch the logs for progress...\n")
     
-    processed_graph = await processor.process_dag(graph, max_retriever_calls=max_retriever_calls)
+    processed_graph, node_results = await processor.process_dag(
+        graph,
+        max_retriever_calls=max_retriever_calls,
+    )
     
     # Step 3: Display results
     print("\n" + "=" * 80)
@@ -122,8 +125,10 @@ async def main():
         print(f"Children: {len(node.children)}")
         print(f"Citations: {len(node.cited_documents)}")
         print(f"\nAnswer:")
-        print(node.report[:500] if node.report else "No answer")
-        if node.report and len(node.report) > 500:
+        node_answer = node_results.get(node_id, "No answer stored (intermediate node)")
+        preview = node_answer[:500]
+        print(preview)
+        if len(node_answer) > 500:
             print("... (truncated)")
     
     # Show root answer specifically
@@ -133,7 +138,8 @@ async def main():
     root = processed_graph.nodes[processed_graph.root_id]
     print(f"\nQuestion: {root.question}")
     print(f"Format: {root.expected_output_format}")
-    print(f"\nAnswer:\n{root.report}")
+    root_answer = node_results.get(root.id, root.report or "No answer")
+    print(f"\nAnswer:\n{root_answer}")
     
     # Show citations
     if root.cited_documents:

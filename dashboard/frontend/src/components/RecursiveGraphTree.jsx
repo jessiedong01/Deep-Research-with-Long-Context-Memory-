@@ -33,6 +33,8 @@ function ResearchNode({ data, selected }) {
     depth,
     expectedOutputFormat,
     compositionInstructions,
+    directCitations,
+    childrenCitations,
     onClick,
     nodeId,
     currentNodeId,
@@ -116,6 +118,18 @@ function ResearchNode({ data, selected }) {
                 title={expectedOutputFormat}
               >
                 {getOutputFormatIcon(expectedOutputFormat)} {expectedOutputFormat}
+              </span>
+            </>
+          )}
+          {(directCitations > 0 || childrenCitations > 0) && (
+            <>
+              <span className="divider">•</span>
+              <span 
+                className="citation-badge" 
+                title={`Sources: ${directCitations} direct${childrenCitations > 0 ? ` (+ ${childrenCitations} from children)` : ''}`}
+              >
+                📚 {directCitations}
+                {childrenCitations > 0 && ` (+${childrenCitations})`}
               </span>
             </>
           )}
@@ -211,6 +225,28 @@ export function RecursiveGraphTree({
 
       const status = (node.status || "pending").toLowerCase();
 
+      // Calculate citation counts
+      const directCitations = node.cited_documents?.length || 0;
+      
+      // Calculate children's citations (recursive)
+      let childrenCitations = 0;
+      if (Array.isArray(node.children)) {
+        const countChildCitations = (childNodeId) => {
+          const childNode = graphNodes[childNodeId];
+          if (!childNode) return 0;
+          let count = childNode.cited_documents?.length || 0;
+          if (childNode.children) {
+            childNode.children.forEach(cid => {
+              count += countChildCitations(cid);
+            });
+          }
+          return count;
+        };
+        node.children.forEach(childId => {
+          childrenCitations += countChildCitations(childId);
+        });
+      }
+
       // Create ReactFlow node
       reactFlowNodes.push({
         id: nodeId,
@@ -221,6 +257,8 @@ export function RecursiveGraphTree({
           depth: node.depth ?? 0,
           expectedOutputFormat: node.expected_output_format,
           compositionInstructions: node.composition_instructions,
+          directCitations,
+          childrenCitations,
           fullData: node,
           nodeId,
           currentNodeId,

@@ -106,7 +106,7 @@ class PresearcherAgent:
         self.logger.info("PHASE 2: Processing DAG (Leaves to Root)")
         self.logger.info("=" * 80)
         
-        processed_graph = await self.dag_processor.process_dag(
+        processed_graph, node_results = await self.dag_processor.process_dag(
             graph=graph,
             max_retriever_calls=request.max_retriever_calls,
         )
@@ -122,7 +122,10 @@ class PresearcherAgent:
         self.logger.info("PHASE 3: Generating Final Report")
         self.logger.info("=" * 80)
         
-        final_report, all_citations = await self.final_report_generator.generate_report(processed_graph)
+        final_report, all_citations = await self.final_report_generator.generate_report(
+            processed_graph,
+            node_results,
+        )
         
         self.logger.info(f"✓ Final report generated ({len(final_report)} characters, {len(all_citations)} citations)")
 

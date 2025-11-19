@@ -255,14 +255,14 @@ class TestDAGProcessor:
         # Populate child reports
         for child_id in root.children:
             child = graph.nodes[child_id]
-            child.report = f"Answer for {child.question}"
             child.status = "complete"
+            processor._node_results[child_id] = f"Answer for {child.question}"
         
         # Process parent
-        await processor._process_parent_node(graph, root)
+        result_text = await processor._process_parent_node(graph, root)
         
         # Verify
-        assert root.report == "Synthesized answer from children"
+        assert result_text == "Synthesized answer from children"
         assert processor.parent_synthesizer.aforward.called
     
     @pytest.mark.asyncio
@@ -291,12 +291,17 @@ class TestDAGProcessor:
         graph = self._create_simple_graph()
         
         # Process
-        result_graph = await processor.process_dag(graph, max_retriever_calls=1)
+        result_graph, node_results = await processor.process_dag(graph, max_retriever_calls=1)
         
         # Verify all nodes processed
-        for node in result_graph.nodes.values():
+        for node_id, node in result_graph.nodes.items():
             assert node.status == "complete"
-            assert node.report is not None
+            if node_id == result_graph.root_id:
+                assert node.report is not None
+                assert node_results.get(node_id) == node.report
+            else:
+                assert node.report is None
+                assert node_id in node_results
     
     @pytest.mark.asyncio
     async def test_citations_preserved_from_children(self):
@@ -322,13 +327,13 @@ class TestDAGProcessor:
         doc2 = RetrievedDocument(url="http://example2.com", excerpts=["Test 2"])
         
         children = [graph.nodes[cid] for cid in root.children]
-        children[0].report = "Answer 1"
         children[0].cited_documents = [doc1]
         children[0].status = "complete"
+        processor._node_results[children[0].id] = "Answer 1"
         
-        children[1].report = "Answer 2"
         children[1].cited_documents = [doc2]
         children[1].status = "complete"
+        processor._node_results[children[1].id] = "Answer 2"
         
         # Process parent
         await processor._process_parent_node(graph, root)
