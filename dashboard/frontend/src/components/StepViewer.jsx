@@ -512,9 +512,176 @@ export function StepViewer({ stepData, stepInfo }) {
     );
   };
 
+  // Render Phase 1: DAG Generation
+  const renderDAGGeneration = () => {
+    const metadata = stepData.metadata || {};
+    const formatCounts = {};
+    
+    // Count output format types if available
+    if (data.nodes) {
+      Object.values(data.nodes).forEach(node => {
+        const format = node.expected_output_format || 'unknown';
+        formatCounts[format] = (formatCounts[format] || 0) + 1;
+      });
+    }
+
+    return (
+      <div className="step-content">
+        <h2>Phase 1: DAG Generation</h2>
+        <div className="info-section">
+          <h3>Generation Summary</h3>
+          <div className="metadata-grid">
+            <div className="metadata-item">
+              <span className="label">Total Nodes:</span>
+              <span className="value">{metadata.total_nodes || 0}</span>
+            </div>
+            <div className="metadata-item">
+              <span className="label">Max Depth Reached:</span>
+              <span className="value">{metadata.max_depth_reached || 0}</span>
+            </div>
+            <div className="metadata-item">
+              <span className="label">Leaf Nodes:</span>
+              <span className="value">{metadata.leaf_nodes || 0}</span>
+            </div>
+          </div>
+        </div>
+
+        {Object.keys(formatCounts).length > 0 && (
+          <div className="info-section">
+            <h3>Node Breakdown by Format</h3>
+            <div className="format-breakdown">
+              {Object.entries(formatCounts).map(([format, count]) => (
+                <div key={format} className="format-item">
+                  <span className="format-name">{format}</span>
+                  <span className="format-count">{count} nodes</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="info-section">
+          <h3>Root Question</h3>
+          <p>{data.nodes?.[data.root_id]?.question || 'N/A'}</p>
+        </div>
+      </div>
+    );
+  };
+
+  // Render Phase 2: DAG Processing
+  const renderDAGProcessed = () => {
+    const metadata = stepData.metadata || {};
+    const nodes = data.nodes || {};
+    const completedNodes = Object.values(nodes).filter(n => n.status === 'complete' || n.status === 'completed');
+
+    return (
+      <div className="step-content">
+        <h2>Phase 2: DAG Processing</h2>
+        <div className="info-section">
+          <h3>Processing Summary</h3>
+          <div className="metadata-grid">
+            <div className="metadata-item">
+              <span className="label">Nodes Completed:</span>
+              <span className="value">{completedNodes.length} / {Object.keys(nodes).length}</span>
+            </div>
+            {metadata.processing_time && (
+              <div className="metadata-item">
+                <span className="label">Processing Time:</span>
+                <span className="value">{metadata.processing_time}s</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="info-section">
+          <h3>Node Results</h3>
+          <div className="node-results">
+            {completedNodes.map((node, idx) => (
+              <div key={node.id || idx} className="node-result-card">
+                <div className="node-result-header">
+                  <span className="node-question-title">{node.question}</span>
+                  {node.expected_output_format && (
+                    <span className="node-format-badge">{node.expected_output_format}</span>
+                  )}
+                </div>
+                {node.report && (
+                  <div className="node-result-answer">
+                    <ReactMarkdown>{node.report}</ReactMarkdown>
+                  </div>
+                )}
+                {node.cited_documents && node.cited_documents.length > 0 && (
+                  <div className="node-citations">
+                    <span className="citations-count">
+                      📚 {node.cited_documents.length} citations
+                    </span>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Render Phase 3: Final Report (enhanced version of existing renderFinalReport)
+  const renderThreePhaseFinalReport = () => {
+    const metadata = stepData.metadata || {};
+
+    return (
+      <div className="step-content">
+        <h2>Phase 3: Final Report</h2>
+        <div className="info-section">
+          <h3>Report Statistics</h3>
+          <div className="metadata-grid">
+            {metadata.report_length && (
+              <div className="metadata-item">
+                <span className="label">Report Length:</span>
+                <span className="value">{metadata.report_length} characters</span>
+              </div>
+            )}
+            {metadata.num_citations !== undefined && (
+              <div className="metadata-item">
+                <span className="label">Citations:</span>
+                <span className="value">{metadata.num_citations}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {data.outline && (
+          <div className="info-section">
+            <h3>Report Outline</h3>
+            <div className="outline-content">
+              <ReactMarkdown>{data.outline}</ReactMarkdown>
+            </div>
+          </div>
+        )}
+
+        {data.report && (
+          <div className="info-section">
+            <h3>Final Report</h3>
+            <div className="markdown-content">
+              <ReactMarkdown>{data.report}</ReactMarkdown>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // Route to appropriate renderer based on step name
   const renderStepContent = () => {
     switch (stepInfo.step_name) {
+      // Three-phase pipeline steps
+      case "00_dag_generation":
+        return renderDAGGeneration();
+      case "01_dag_processed":
+        return renderDAGProcessed();
+      case "02_final_report":
+        return renderThreePhaseFinalReport();
+      
+      // Legacy pipeline steps
       case "01_purpose_generation":
         return renderPurposeGeneration();
       case "02_outline_generation":

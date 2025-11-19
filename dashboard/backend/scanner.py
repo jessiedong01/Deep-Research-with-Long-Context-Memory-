@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from .models import RunMetadata, RunStatus, StepInfo, StepStatus
+from .models import RunMetadata, RunStatus, StepInfo, StepStatus, PipelinePhase
 
 
 class LogScanner:
@@ -56,6 +56,55 @@ class LogScanner:
         except Exception as e:
             print(f"Error reading step file {step_file}: {e}")
             return None
+    
+    def _detect_three_phase_run(self, run_dir: Path) -> bool:
+        """Check if this is a three-phase pipeline run.
+        
+        Returns True if any of the new phase step files exist:
+        - 00_dag_generation.json
+        - 01_dag_processed.json
+        - 02_final_report.json
+        """
+        phase_files = [
+            "00_dag_generation.json",
+            "01_dag_processed.json", 
+            "02_final_report.json"
+        ]
+        return any((run_dir / f).exists() for f in phase_files)
+    
+    def _detect_phases(self, run_dir: Path) -> tuple[Optional[PipelinePhase], list[PipelinePhase]]:
+        """Detect current phase and completed phases.
+        
+        Returns: (current_phase, phases_complete)
+        """
+        phases_complete = []
+        current_phase = None
+        
+        # Check Phase 1: DAG Generation
+        if (run_dir / "00_dag_generation.json").exists():
+            phases_complete.append(PipelinePhase.DAG_GENERATION)
+        
+        # Check Phase 2: DAG Processing
+        if (run_dir / "01_dag_processed.json").exists():
+            phases_complete.append(PipelinePhase.DAG_PROCESSING)
+        
+        # Check Phase 3: Report Generation
+        if (run_dir / "02_final_report.json").exists():
+            phases_complete.append(PipelinePhase.REPORT_GENERATION)
+        
+        # Determine current phase based on what's complete
+        if PipelinePhase.REPORT_GENERATION in phases_complete:
+            current_phase = PipelinePhase.REPORT_GENERATION
+        elif PipelinePhase.DAG_PROCESSING in phases_complete:
+            current_phase = PipelinePhase.DAG_PROCESSING
+        elif PipelinePhase.DAG_GENERATION in phases_complete:
+            current_phase = PipelinePhase.DAG_PROCESSING  # Moving to phase 2
+        else:
+            # No phases complete yet, but if recursive_graph exists, might be starting
+            if (run_dir / "recursive_graph.json").exists():
+                current_phase = PipelinePhase.DAG_GENERATION
+        
+        return current_phase, phases_complete
     
     def _is_root_node_completed(self, run_dir: Path) -> bool:
         """Check if the root node in recursive_graph.json is completed.
@@ -195,6 +244,12 @@ class LogScanner:
                         current_step = step.step_name
                         break
             
+            # Detect if this is a three-phase run and get phase info
+            is_three_phase = self._detect_three_phase_run(run_dir)
+            current_phase, phases_complete = None, []
+            if is_three_phase:
+                current_phase, phases_complete = self._detect_phases(run_dir)
+            
             return RunMetadata(
                 run_id=run_id,
                 topic=topic,
@@ -208,7 +263,10 @@ class LogScanner:
                 max_depth=max_depth,
                 max_nodes=max_nodes,
                 max_subtasks=max_subtasks,
-                steps=steps
+                steps=steps,
+                current_phase=current_phase,
+                phases_complete=phases_complete,
+                is_three_phase=is_three_phase
             )
             
         except Exception as e:
@@ -217,33 +275,59 @@ class LogScanner:
     
     def _parse_steps(self, run_dir: Path, log_lines: list[dict]) -> list[StepInfo]:
         """Parse step information from log files."""
-        step_names = [
-            "01_purpose_generation",
-            "02_outline_generation",
-            "03_literature_search",
-            "04_report_generation",
-            "05_final_report",
-        ]
+        # Detect if this is a three-phase run
+        is_three_phase = self._detect_three_phase_run(run_dir)
+        
+        # Use different step names based on pipeline type
+        if is_three_phase:
+            step_names = [
+                "00_run_config",
+                "00_dag_generation",
+                "01_dag_processed",
+                "02_final_report",
+            ]
+        else:
+            # Legacy pipeline steps
+            step_names = [
+                "01_purpose_generation",
+                "02_outline_generation",
+                "03_literature_search",
+                "04_report_generation",
+                "05_final_report",
+            ]
         
         # Determine which step is currently in progress by checking logs
         current_step_in_progress = None
         for log in reversed(log_lines):
             message = log.get('message', '')
-            if 'Step 1/5: Generating research purposes' in message:
-                current_step_in_progress = "01_purpose_generation"
-                break
-            elif 'Step 2/5: Generating report outline' in message:
-                current_step_in_progress = "02_outline_generation"
-                break
-            elif 'Step 3/5: Conducting literature search' in message:
-                current_step_in_progress = "03_literature_search"
-                break
-            elif 'Step 4/5: Generating individual reports' in message:
-                current_step_in_progress = "04_report_generation"
-                break
-            elif 'Step 5/5: Combining reports' in message:
-                current_step_in_progress = "05_final_report"
-                break
+            if is_three_phase:
+                # Three-phase pipeline messages
+                if 'PHASE 1: Generate DAG' in message or 'DAG generation' in message:
+                    current_step_in_progress = "00_dag_generation"
+                    break
+                elif 'PHASE 2: Process DAG' in message or 'DAG processing' in message:
+                    current_step_in_progress = "01_dag_processed"
+                    break
+                elif 'PHASE 3: Generate Final Report' in message or 'Final report generation' in message:
+                    current_step_in_progress = "02_final_report"
+                    break
+            else:
+                # Legacy pipeline messages
+                if 'Step 1/5: Generating research purposes' in message:
+                    current_step_in_progress = "01_purpose_generation"
+                    break
+                elif 'Step 2/5: Generating report outline' in message:
+                    current_step_in_progress = "02_outline_generation"
+                    break
+                elif 'Step 3/5: Conducting literature search' in message:
+                    current_step_in_progress = "03_literature_search"
+                    break
+                elif 'Step 4/5: Generating individual reports' in message:
+                    current_step_in_progress = "04_report_generation"
+                    break
+                elif 'Step 5/5: Combining reports' in message:
+                    current_step_in_progress = "05_final_report"
+                    break
         
         steps: list[StepInfo] = []
         for i, step_name in enumerate(step_names, 1):

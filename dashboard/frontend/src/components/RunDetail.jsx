@@ -8,6 +8,7 @@ import ReactMarkdown from "react-markdown";
 import { api } from "../api";
 import { useWebSocket } from "../hooks/useWebSocket";
 import { RecursiveGraphTree } from "./RecursiveGraphTree";
+import PhaseProgress from "./PhaseProgress";
 import "./RunDetail.css";
 
 export function RunDetail() {
@@ -21,6 +22,8 @@ export function RunDetail() {
   const [error, setError] = useState(null);
   const [selectedNode, setSelectedNode] = useState(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [phaseData, setPhaseData] = useState(null);
+  const [phaseLoading, setPhaseLoading] = useState(false);
 
   // Connect WebSocket for real-time updates if run is active
   const { messages } = useWebSocket(
@@ -36,17 +39,22 @@ export function RunDetail() {
         if (!graphNotFound) {
           loadGraph();
         }
+        // Also update phase data for three-phase runs
+        if (runDetail?.metadata?.is_three_phase) {
+          loadPhaseData();
+        }
       }, 5000); // Refresh every 5 seconds
 
       return () => clearInterval(interval);
     }
-  }, [runDetail?.metadata?.status, graphNotFound]);
+  }, [runDetail?.metadata?.status, runDetail?.metadata?.is_three_phase, graphNotFound]);
 
   useEffect(() => {
     // Reset graph not found state when switching runs
     setGraphNotFound(false);
     loadRunDetail();
     loadGraph();
+    loadPhaseData();
   }, [runId]);
 
   // Live timer for running tasks
@@ -110,6 +118,19 @@ export function RunDetail() {
       }
     } finally {
       setGraphLoading(false);
+    }
+  };
+
+  const loadPhaseData = async () => {
+    try {
+      setPhaseLoading(true);
+      const data = await api.fetchPhaseStatus(runId);
+      setPhaseData(data);
+    } catch (err) {
+      console.error("Error loading phase data:", err);
+      setPhaseData(null);
+    } finally {
+      setPhaseLoading(false);
     }
   };
 
@@ -365,6 +386,15 @@ export function RunDetail() {
               </>
             )}
           </div>
+
+          {/* Show phase progress for three-phase pipeline runs */}
+          {runDetail.metadata.is_three_phase && phaseData && (
+            <PhaseProgress
+              phases={phaseData.phases || []}
+              currentPhase={phaseData.current_phase}
+              isThreePhase={phaseData.is_three_phase}
+            />
+          )}
 
           <div className="activity-indicator-card">
             <h3>Status</h3>

@@ -23,6 +23,13 @@ class StepStatus(str, Enum):
     FAILED = "failed"
 
 
+class PipelinePhase(str, Enum):
+    """Phase of the three-phase pipeline."""
+    DAG_GENERATION = "dag_generation"
+    DAG_PROCESSING = "dag_processing"
+    REPORT_GENERATION = "report_generation"
+
+
 class StepInfo(BaseModel):
     """Information about a single pipeline step."""
     step_name: str
@@ -48,6 +55,10 @@ class RunMetadata(BaseModel):
     max_nodes: Optional[int] = None
     max_subtasks: Optional[int] = None
     steps: list[StepInfo] = Field(default_factory=list)
+    # Three-phase pipeline support
+    current_phase: Optional[PipelinePhase] = None
+    phases_complete: list[PipelinePhase] = Field(default_factory=list)
+    is_three_phase: bool = False  # Flag to indicate new vs legacy runs
 
 
 class RunListResponse(BaseModel):
@@ -99,9 +110,26 @@ class StartRunResponse(BaseModel):
     message: str
 
 
+class PhaseInfo(BaseModel):
+    """Information about a single pipeline phase."""
+    phase: PipelinePhase
+    status: StepStatus
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    duration_seconds: Optional[float] = None
+    metrics: Optional[dict[str, Any]] = None  # Phase-specific metrics
+
+
+class PhaseStatusResponse(BaseModel):
+    """Response for phase status."""
+    current_phase: Optional[PipelinePhase] = None
+    phases: list[PhaseInfo]
+    is_three_phase: bool
+
+
 class WebSocketMessage(BaseModel):
     """Message sent via WebSocket during pipeline execution."""
-    type: str  # "log", "step_update", "status_change", "error"
+    type: str  # "log", "step_update", "status_change", "error", "phase_transition"
     timestamp: datetime
     data: dict[str, Any]
 

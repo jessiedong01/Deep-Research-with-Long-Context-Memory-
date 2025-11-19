@@ -89,5 +89,16 @@ export const api = {
     }
     return response.json();
   },
+
+  /**
+   * Fetch phase status for a three-phase pipeline run
+   */
+  async fetchPhaseStatus(runId) {
+    const response = await fetch(`${API_BASE_URL}/api/runs/${runId}/phases`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch phase status for run ${runId}`);
+    }
+    return response.json();
+  },
 };
 

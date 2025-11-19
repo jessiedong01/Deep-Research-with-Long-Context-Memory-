@@ -14,6 +14,10 @@ from .models import (
     StartRunResponse,
     RunStatus,
     GraphResponse,
+    PhaseStatusResponse,
+    PhaseInfo,
+    PipelinePhase,
+    StepStatus,
 )
 from .scanner import LogScanner
 from .runner import get_runner
@@ -82,6 +86,8 @@ async def root():
             "runs": "/api/runs",
             "run_detail": "/api/runs/{run_id}",
             "step_detail": "/api/runs/{run_id}/step/{step_name}",
+            "graph": "/api/runs/{run_id}/graph",
+            "phases": "/api/runs/{run_id}/phases",
             "start_run": "/api/runs/start",
             "run_status": "/api/runs/{run_id}/status",
             "websocket": "/ws/{run_id}"
@@ -191,6 +197,89 @@ async def start_run(request: StartRunRequest):
         raise HTTPException(status_code=500, detail=f"Failed to start pipeline: {str(e)}")
 
 
+@app.get("/api/runs/{run_id}/phases", response_model=PhaseStatusResponse)
+async def get_phase_status(run_id: str):
+    """Get phase status for a three-phase pipeline run."""
+    metadata = scanner.get_run(run_id)
+    if not metadata:
+        raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+    
+    if not metadata.is_three_phase:
+        # For legacy runs, return empty phase info
+        return PhaseStatusResponse(
+            current_phase=None,
+            phases=[],
+            is_three_phase=False
+        )
+    
+    # Build phase info from steps and metadata
+    phases_info = []
+    run_dir = scanner.logs_dir / run_id
+    
+    # Phase 1: DAG Generation
+    phase1_file = run_dir / "00_dag_generation.json"
+    if phase1_file.exists():
+        try:
+            import json
+            with open(phase1_file, 'r') as f:
+                phase1_data = json.load(f)
+            timestamp = datetime.fromisoformat(phase1_data.get('timestamp', ''))
+            metrics = phase1_data.get('metadata', {})
+            phases_info.append(PhaseInfo(
+                phase=PipelinePhase.DAG_GENERATION,
+                status=StepStatus.COMPLETED,
+                started_at=timestamp,
+                completed_at=timestamp,
+                metrics=metrics
+            ))
+        except Exception as e:
+            print(f"Error reading phase 1 data: {e}")
+    
+    # Phase 2: DAG Processing
+    phase2_file = run_dir / "01_dag_processed.json"
+    if phase2_file.exists():
+        try:
+            import json
+            with open(phase2_file, 'r') as f:
+                phase2_data = json.load(f)
+            timestamp = datetime.fromisoformat(phase2_data.get('timestamp', ''))
+            metrics = phase2_data.get('metadata', {})
+            phases_info.append(PhaseInfo(
+                phase=PipelinePhase.DAG_PROCESSING,
+                status=StepStatus.COMPLETED,
+                started_at=timestamp,
+                completed_at=timestamp,
+                metrics=metrics
+            ))
+        except Exception as e:
+            print(f"Error reading phase 2 data: {e}")
+    
+    # Phase 3: Report Generation
+    phase3_file = run_dir / "02_final_report.json"
+    if phase3_file.exists():
+        try:
+            import json
+            with open(phase3_file, 'r') as f:
+                phase3_data = json.load(f)
+            timestamp = datetime.fromisoformat(phase3_data.get('timestamp', ''))
+            metrics = phase3_data.get('metadata', {})
+            phases_info.append(PhaseInfo(
+                phase=PipelinePhase.REPORT_GENERATION,
+                status=StepStatus.COMPLETED,
+                started_at=timestamp,
+                completed_at=timestamp,
+                metrics=metrics
+            ))
+        except Exception as e:
+            print(f"Error reading phase 3 data: {e}")
+    
+    return PhaseStatusResponse(
+        current_phase=metadata.current_phase,
+        phases=phases_info,
+        is_three_phase=True
+    )
+
+
 @app.get("/api/runs/{run_id}/status")
 async def get_run_status(run_id: str):
     """Get the current status of a running pipeline."""
@@ -202,13 +291,20 @@ async def get_run_status(run_id: str):
     # If not active, check completed runs
     metadata = scanner.get_run(run_id)
     if metadata:
-        return {
+        response = {
             "status": metadata.status,
             "topic": metadata.topic,
             "started_at": metadata.started_at,
             "completed_at": metadata.completed_at,
             "current_step": metadata.current_step
         }
+        # Add phase info for three-phase runs
+        if metadata.is_three_phase:
+            response["is_three_phase"] = True
+            response["current_phase"] = metadata.current_phase
+            response["phases_complete"] = metadata.phases_complete
+        
+        return response
     
     raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
 

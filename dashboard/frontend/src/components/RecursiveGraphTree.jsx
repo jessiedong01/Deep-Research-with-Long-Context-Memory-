@@ -13,13 +13,26 @@ import "@xyflow/react/dist/style.css";
 import "./RecursiveGraphTree.css";
 import dagre from "dagre";
 
+// Map output format to icon
+const getOutputFormatIcon = (format) => {
+  const formatIcons = {
+    boolean: "🔲",
+    list: "📋",
+    table_csv: "📊",
+    report: "📄",
+    short_answer: "💬",
+  };
+  return formatIcons[format] || "❓";
+};
+
 // Custom node component
 function ResearchNode({ data, selected }) {
   const {
     question,
     status,
     depth,
-    isAnswerable,
+    expectedOutputFormat,
+    compositionInstructions,
     onClick,
     nodeId,
     currentNodeId,
@@ -48,6 +61,20 @@ function ResearchNode({ data, selected }) {
   const truncatedQuestion =
     question.length > 60 ? question.substring(0, 57) + "..." : question;
 
+  // Build tooltip content
+  const tooltipContent = [
+    `Question: ${question}`,
+    `Format: ${expectedOutputFormat || "N/A"}`,
+    `Status: ${displayStatus}`,
+  ];
+  if (compositionInstructions) {
+    const truncated =
+      compositionInstructions.length > 100
+        ? compositionInstructions.substring(0, 100) + "..."
+        : compositionInstructions;
+    tooltipContent.push(`Composition: ${truncated}`);
+  }
+
   return (
     <div
       className={`research-node ${selected ? "selected" : ""} ${
@@ -58,6 +85,7 @@ function ResearchNode({ data, selected }) {
         borderColor: colors.border,
       }}
       onClick={onClick}
+      title={tooltipContent.join("\n")}
     >
       <Handle
         type="target"
@@ -80,11 +108,16 @@ function ResearchNode({ data, selected }) {
         <div className="node-question">{truncatedQuestion}</div>
         <div className="node-meta">
           <span>Depth {depth}</span>
-          {typeof isAnswerable === "boolean" && (
-            <span className="divider">•</span>
-          )}
-          {typeof isAnswerable === "boolean" && (
-            <span>{isAnswerable ? "Answerable" : "Not answerable"}</span>
+          {expectedOutputFormat && (
+            <>
+              <span className="divider">•</span>
+              <span
+                className="format-badge"
+                title={expectedOutputFormat}
+              >
+                {getOutputFormatIcon(expectedOutputFormat)} {expectedOutputFormat}
+              </span>
+            </>
           )}
         </div>
       </div>
@@ -186,7 +219,8 @@ export function RecursiveGraphTree({
           question: node.question || nodeId,
           status,
           depth: node.depth ?? 0,
-          isAnswerable: node.is_answerable,
+          expectedOutputFormat: node.expected_output_format,
+          compositionInstructions: node.composition_instructions,
           fullData: node,
           nodeId,
           currentNodeId,

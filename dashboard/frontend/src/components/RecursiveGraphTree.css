@@ -84,6 +84,18 @@
   color: #d1d5db;
 }
 
+.format-badge {
+  background-color: #e0f2fe;
+  color: #0369a1;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
 /* ReactFlow overrides */
 .react-flow__node {
   border-radius: 8px;
