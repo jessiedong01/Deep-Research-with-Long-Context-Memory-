@@ -117,13 +117,10 @@ def init_report_generation_agent(literature_search_agent: LiteratureSearchAgent)
     return report_generation_agent
 
 def init_presearcher_agent():
-    """Initialize the Presearcher Agent with all sub-agents."""
-    from presearcher.report_generation import ReportCombiner
+    """Initialize the Presearcher Agent with the new three-phase architecture."""
     
-    # Initialize all sub-agents
+    # Initialize the RAG agent for literature search
     rag_agent = init_rag_agent()
-    purpose_generation_agent = init_purpose_generation_agent()
-    outline_generation_agent = init_outline_generation_agent()
     
     # Initialize the Literature Search Agent for planning and answer synthesis
     literature_search_planning_lm = init_lm(
@@ -160,14 +157,11 @@ def init_presearcher_agent():
         answer_synthesis_lm=answer_synthesis_lm,
     )
     
-    # Initialize report generation agent
-    report_generation_agent = init_report_generation_agent(literature_search_agent)
-
+    # Initialize PresearcherAgent with the new simplified architecture
+    # It only needs the literature search agent and LM - it creates its own
+    # DAGGenerationAgent, DAGProcessor, and FinalReportGenerator internally
     presearcher_agent = PresearcherAgent(
-        purpose_generation_agent=purpose_generation_agent,
-        outline_generation_agent=outline_generation_agent,
         literature_search_agent=literature_search_agent,
-        report_generation_agent=report_generation_agent,
         lm=answer_synthesis_lm,
     )
 

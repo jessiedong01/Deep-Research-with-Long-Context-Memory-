@@ -138,7 +138,6 @@ class ResearchNode:
     # Structural / control metadata
     status: str = "pending"  # pending | in_progress | complete | failed
     depth: int = 0
-    is_answerable: bool | None = None
     normalized_question: str | None = None
 
     # Results attached to this node
@@ -149,6 +148,10 @@ class ResearchNode:
     # Decomposition information
     subtasks: list[str] = field(default_factory=list)
     composition_explanation: str | None = None
+    
+    # DAG-specific fields for upfront planning
+    expected_output_format: str | None = None
+    composition_instructions: str | None = None
 
     # If this node's report or results were reused from another node,
     # this field can point to the canonical node id.
@@ -166,7 +169,6 @@ class ResearchNode:
             "children": list(self.children),
             "status": self.status,
             "depth": self.depth,
-            "is_answerable": self.is_answerable,
             "normalized_question": self.normalized_question
             or _normalize_question(self.question),
             "literature_writeup": self.literature_writeup,
@@ -174,6 +176,8 @@ class ResearchNode:
             "cited_documents": [doc.to_dict() for doc in self.cited_documents],
             "subtasks": list(self.subtasks),
             "composition_explanation": self.composition_explanation,
+            "expected_output_format": self.expected_output_format,
+            "composition_instructions": self.composition_instructions,
             "reused_from_node_id": self.reused_from_node_id,
             "metadata": dict(self.metadata),
         }
@@ -193,13 +197,14 @@ class ResearchNode:
             children=list(data.get("children", [])),
             status=data.get("status", "pending"),
             depth=data.get("depth", 0),
-            is_answerable=data.get("is_answerable"),
             normalized_question=data.get("normalized_question"),
             literature_writeup=data.get("literature_writeup"),
             report=data.get("report"),
             cited_documents=cited_documents,
             subtasks=list(data.get("subtasks", [])),
             composition_explanation=data.get("composition_explanation"),
+            expected_output_format=data.get("expected_output_format"),
+            composition_instructions=data.get("composition_instructions"),
             reused_from_node_id=data.get("reused_from_node_id"),
             metadata=dict(data.get("metadata", {})),
         )
@@ -258,13 +263,14 @@ class ResearchGraph:
             children=[],
             status="pending",
             depth=depth,
-            is_answerable=None,
             normalized_question=normalized,
             literature_writeup=None,
             report=None,
             cited_documents=[],
             subtasks=[],
             composition_explanation=None,
+            expected_output_format=None,
+            composition_instructions=None,
             reused_from_node_id=None,
             metadata={},
         )

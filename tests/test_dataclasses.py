@@ -17,6 +17,7 @@ from utils.dataclass import (
     PresearcherAgentResponse,
     ReportGenerationRequest,
     ReportGenerationResponse,
+    ResearchNode,
     ResearchGraph,
     _normalize_question,
 )
@@ -424,6 +425,65 @@ class TestPresearcherAgentResponse:
         assert result["misc"]["nested"]["dict"]["a"] == "b"
 
 
+class TestResearchNode:
+    """Tests for the ResearchNode dataclass with new DAG-specific fields."""
+    
+    def test_new_fields_initialization(self):
+        """Test that new expected_output_format and composition_instructions fields exist."""
+        graph = ResearchGraph()
+        node = graph.get_or_create_node("Test question", parent_id=None, depth=0)
+        
+        # New fields should exist and default to None
+        assert hasattr(node, 'expected_output_format')
+        assert hasattr(node, 'composition_instructions')
+        assert node.expected_output_format is None
+        assert node.composition_instructions is None
+        
+    def test_is_answerable_field_removed(self):
+        """Test that is_answerable field has been removed from ResearchNode."""
+        graph = ResearchGraph()
+        node = graph.get_or_create_node("Test question", parent_id=None, depth=0)
+        
+        # The is_answerable field should not exist
+        assert not hasattr(node, 'is_answerable')
+    
+    def test_node_with_output_format_serialization(self):
+        """Test serialization of node with expected_output_format."""
+        graph = ResearchGraph()
+        node = graph.get_or_create_node("Test question", parent_id=None, depth=0)
+        node.expected_output_format = "boolean"
+        node.composition_instructions = "Combine child results by voting"
+        
+        serialized = node.to_dict()
+        
+        assert serialized["expected_output_format"] == "boolean"
+        assert serialized["composition_instructions"] == "Combine child results by voting"
+        # is_answerable should not be in serialized output
+        assert "is_answerable" not in serialized
+    
+    def test_node_roundtrip_with_new_fields(self):
+        """Test that nodes with new fields survive roundtrip serialization."""
+        from utils.dataclass import ResearchNode
+        
+        node = ResearchNode(
+            id="node_1",
+            question="Test question",
+            parents=[],
+            children=[],
+            status="pending",
+            depth=0,
+            expected_output_format="list",
+            composition_instructions="Merge all lists"
+        )
+        
+        serialized = node.to_dict()
+        deserialized = ResearchNode.from_dict(serialized)
+        
+        assert deserialized.expected_output_format == "list"
+        assert deserialized.composition_instructions == "Merge all lists"
+        assert not hasattr(deserialized, 'is_answerable')
+
+
 class TestResearchGraph:
     """Tests for the ResearchNode/ResearchGraph DAG structures."""
 
@@ -455,6 +515,23 @@ class TestResearchGraph:
 
         assert restored.root_id == graph.root_id
         assert set(restored.nodes.keys()) == set(graph.nodes.keys())
+    
+    def test_graph_with_new_node_fields(self):
+        """Test graph serialization with nodes containing new fields."""
+        graph = ResearchGraph()
+        root = graph.get_or_create_node("Root", parent_id=None, depth=0)
+        root.expected_output_format = "report"
+        root.composition_instructions = "Synthesize from children"
+        
+        child = graph.get_or_create_node("Child", parent_id=root.id, depth=1)
+        child.expected_output_format = "boolean"
+        
+        serialized = graph.to_dict()
+        restored = ResearchGraph.from_dict(serialized)
+        
+        assert restored.nodes[root.id].expected_output_format == "report"
+        assert restored.nodes[root.id].composition_instructions == "Synthesize from children"
+        assert restored.nodes[child.id].expected_output_format == "boolean"
 
 
 
