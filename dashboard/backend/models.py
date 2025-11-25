@@ -101,6 +101,7 @@ class StartRunRequest(BaseModel):
     max_depth: int = 2
     max_nodes: int = 50
     max_subtasks: int = 10
+    max_refinements: int = 1
     test_dag_path: str | None = None
 
 

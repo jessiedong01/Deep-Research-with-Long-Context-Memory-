@@ -176,6 +176,19 @@
   flex-shrink: 0;
 }
 
+/* Refinement indicators */
+.refining-icon {
+  font-size: 14px;
+  margin-right: 6px;
+  animation: spin 2s linear infinite;
+}
+
+.refinement-child-icon {
+  font-size: 12px;
+  margin-right: 4px;
+  opacity: 0.8;
+}
+
 @keyframes spin {
   0% {
     transform: rotate(0deg);

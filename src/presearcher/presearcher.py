@@ -89,6 +89,7 @@ class PresearcherAgent:
                 "max_depth": request.max_depth,
                 "max_nodes": request.max_nodes,
                 "max_subtasks": request.max_subtasks,
+                "max_refinements": request.max_refinements,
                 "prebuilt_graph_path": request.prebuilt_graph_path,
             },
         )
@@ -128,6 +129,7 @@ class PresearcherAgent:
         processed_graph, node_results = await self.dag_processor.process_dag(
             graph=graph,
             max_retriever_calls=request.max_retriever_calls,
+            max_refinements=request.max_refinements,
         )
         
         # Save processed DAG snapshot

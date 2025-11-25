@@ -15,6 +15,7 @@ export function NewRunForm() {
   const [maxDepth, setMaxDepth] = useState(2);
   const [maxNodes, setMaxNodes] = useState(50);
   const [maxSubtasks, setMaxSubtasks] = useState(10);
+  const [maxRefinements, setMaxRefinements] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [runId, setRunId] = useState(null);
@@ -94,6 +95,7 @@ export function NewRunForm() {
         maxDepth,
         maxNodes,
         maxSubtasks,
+        maxRefinements,
         selectedDagPath || null
       );
       setRunId(response.run_id);
@@ -205,6 +207,18 @@ export function NewRunForm() {
             onChange={(e) => setMaxSubtasks(parseInt(e.target.value, 10) || 1)}
             min={1}
             max={20}
+            disabled={isSubmitting}
+          />
+        </div>
+        <div className="form-group small">
+          <label htmlFor="maxRefinements">Max Refinements</label>
+          <input
+            type="number"
+            id="maxRefinements"
+            value={maxRefinements}
+            onChange={(e) => setMaxRefinements(parseInt(e.target.value, 10) || 0)}
+            min={0}
+            max={5}
             disabled={isSubmitting}
           />
         </div>

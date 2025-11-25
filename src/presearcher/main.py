@@ -44,6 +44,7 @@ async def main():
     max_depth = 2
     max_nodes = 50
     max_subtasks = 10
+    max_refinements = 1
     
     # Allow user to optionally configure parameters
     configure = input("Would you like to configure advanced parameters? (y/N): ").strip().lower()
@@ -53,10 +54,11 @@ async def main():
             max_depth = int(input(f"Max depth (default {max_depth}): ").strip() or max_depth)
             max_nodes = int(input(f"Max nodes (default {max_nodes}): ").strip() or max_nodes)
             max_subtasks = int(input(f"Max subtasks per node (default {max_subtasks}): ").strip() or max_subtasks)
+            max_refinements = int(input(f"Max refinements per node (default {max_refinements}): ").strip() or max_refinements)
         except ValueError as e:
             logger.warning(f"Invalid input for configuration, using defaults: {e}")
     
-    logger.info(f"Pipeline configuration: max_retriever_calls={max_retriever_calls}, max_depth={max_depth}, max_nodes={max_nodes}, max_subtasks={max_subtasks}")
+    logger.info(f"Pipeline configuration: max_retriever_calls={max_retriever_calls}, max_depth={max_depth}, max_nodes={max_nodes}, max_subtasks={max_subtasks}, max_refinements={max_refinements}")
 
     # Run the presearcher pipeline
     presearcher_response: PresearcherAgentResponse = await presearcher_agent.aforward(
@@ -65,7 +67,8 @@ async def main():
             max_retriever_calls=max_retriever_calls,
             max_depth=max_depth,
             max_nodes=max_nodes,
-            max_subtasks=max_subtasks
+            max_subtasks=max_subtasks,
+            max_refinements=max_refinements,
         )
     )
 

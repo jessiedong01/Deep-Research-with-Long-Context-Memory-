@@ -246,6 +246,7 @@ async def start_run(request: StartRunRequest):
             max_depth=request.max_depth,
             max_nodes=request.max_nodes,
             max_subtasks=request.max_subtasks,
+            max_refinements=request.max_refinements,
             test_dag_path=normalized_path,
         )
         

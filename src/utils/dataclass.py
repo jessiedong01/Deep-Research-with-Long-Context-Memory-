@@ -481,6 +481,9 @@ class PresearcherAgentRequest:
     max_subtasks: int = 10
     """Maximum number of subtasks (child nodes) to generate per parent node."""
 
+    max_refinements: int = 1
+    """Maximum backtracking iterations per node for gap-filling (0 = disabled)."""
+
     reuse_existing_nodes: bool = True
     """Whether to reuse existing nodes for identical normalized questions."""
 

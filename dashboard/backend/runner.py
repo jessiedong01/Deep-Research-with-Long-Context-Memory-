@@ -69,6 +69,7 @@ class PipelineRunner:
         max_depth: int = 2,
         max_nodes: int = 50,
         max_subtasks: int = 10,
+        max_refinements: int = 1,
         test_dag_path: str | None = None,
     ) -> str:
         """
@@ -98,6 +99,7 @@ class PipelineRunner:
             "max_depth": max_depth,
             "max_nodes": max_nodes,
             "max_subtasks": max_subtasks,
+            "max_refinements": max_refinements,
             "test_dag_path": test_dag_path,
         }
 
@@ -113,6 +115,7 @@ class PipelineRunner:
                 max_depth=max_depth,
                 max_nodes=max_nodes,
                 max_subtasks=max_subtasks,
+                max_refinements=max_refinements,
                 test_dag_path=test_dag_path,
                 logger=logger,
             )
@@ -128,6 +131,7 @@ class PipelineRunner:
         max_depth: int,
         max_nodes: int,
         max_subtasks: int,
+        max_refinements: int,
         test_dag_path: str | None,
         logger,
     ):
@@ -157,7 +161,8 @@ class PipelineRunner:
                 f"max_retriever_calls={max_retriever_calls}, "
                 f"max_depth={max_depth}, "
                 f"max_nodes={max_nodes}, "
-                f"max_subtasks={max_subtasks}"
+                f"max_subtasks={max_subtasks}, "
+                f"max_refinements={max_refinements}"
             )
             if test_dag_path:
                 logger.info(f"Prebuilt DAG path: {test_dag_path}")
@@ -176,6 +181,7 @@ class PipelineRunner:
                     max_depth=max_depth,
                     max_nodes=max_nodes,
                     max_subtasks=max_subtasks,
+                    max_refinements=max_refinements,
                     prebuilt_graph_path=test_dag_path,
                 )
             )

@@ -38,15 +38,19 @@ function ResearchNode({ data, selected }) {
     onClick,
     nodeId,
     currentNodeId,
+    refinementIteration,
   } = data;
 
   const isCurrent = nodeId === currentNodeId;
   const isActive = status === "in_progress";
+  const isRefining = status === "refining";
+  const isRefinementChild = refinementIteration > 0;
 
   const statusColors = {
     complete: { bg: "#ecfdf5", border: "#10b981", text: "#059669" },
     completed: { bg: "#ecfdf5", border: "#10b981", text: "#059669" },
     in_progress: { bg: "#fef3c7", border: "#f59e0b", text: "#d97706" },
+    refining: { bg: "#ede9fe", border: "#8b5cf6", text: "#7c3aed" },
     pending: { bg: "#f9fafb", border: "#d1d5db", text: "#6b7280" },
     failed: { bg: "#fef2f2", border: "#ef4444", text: "#dc2626" },
   };
@@ -97,6 +101,8 @@ function ResearchNode({ data, selected }) {
       />
       <div className="node-header">
         {isActive && <div className="spinner-icon" />}
+        {isRefining && <span className="refining-icon" title="Refining: filling information gaps">🔄</span>}
+        {isRefinementChild && <span className="refinement-child-icon" title={`Added in refinement iteration ${refinementIteration}`}>🔁</span>}
         <span
           className="status-badge"
           style={{
@@ -262,6 +268,7 @@ export function RecursiveGraphTree({
           compositionInstructions: node.composition_instructions,
           directCitations,
           childrenCitations,
+          refinementIteration: node.metadata?.refinement_iteration || 0,
           fullData: node,
           nodeId,
           currentNodeId,

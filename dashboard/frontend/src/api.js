@@ -47,6 +47,7 @@ export const api = {
     maxDepth = 2,
     maxNodes = 50,
     maxSubtasks = 10,
+    maxRefinements = 1,
     testDagPath = null
   ) {
     const response = await fetch(`${API_BASE_URL}/api/runs/start`, {
@@ -60,6 +61,7 @@ export const api = {
         max_depth: maxDepth,
         max_nodes: maxNodes,
         max_subtasks: maxSubtasks,
+        max_refinements: maxRefinements,
         test_dag_path: testDagPath,
       }),
     });
