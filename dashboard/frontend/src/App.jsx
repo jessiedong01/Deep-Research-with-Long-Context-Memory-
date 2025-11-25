@@ -5,6 +5,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { RunsList } from './components/RunsList';
 import { RunDetail } from './components/RunDetail';
 import { NewRunForm } from './components/NewRunForm';
+import { DAGTestPage } from './components/DAGTestPage';
 import './App.css';
 
 function App() {
@@ -19,6 +20,7 @@ function App() {
             <nav className="main-nav">
               <a href="/">Runs</a>
               <a href="/new">New Run</a>
+              <a href="/test-dag">Test DAG</a>
             </nav>
           </div>
         </header>
@@ -28,6 +30,7 @@ function App() {
             <Route path="/" element={<RunsList />} />
             <Route path="/runs/:runId" element={<RunDetail />} />
             <Route path="/new" element={<NewRunForm />} />
+            <Route path="/test-dag" element={<DAGTestPage />} />
           </Routes>
         </main>
 

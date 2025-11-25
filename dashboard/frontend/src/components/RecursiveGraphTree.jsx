@@ -226,7 +226,9 @@ export function RecursiveGraphTree({
       const status = (node.status || "pending").toLowerCase();
 
       // Calculate citation counts
-      const directCitations = node.cited_documents?.length || 0;
+      // Only leaf nodes have direct citations; intermediate nodes inherit from children
+      const isLeaf = !Array.isArray(node.children) || node.children.length === 0;
+      const directCitations = isLeaf ? (node.cited_documents?.length || 0) : 0;
       
       // Calculate children's citations (recursive)
       let childrenCitations = 0;
@@ -234,7 +236,8 @@ export function RecursiveGraphTree({
         const countChildCitations = (childNodeId) => {
           const childNode = graphNodes[childNodeId];
           if (!childNode) return 0;
-          let count = childNode.cited_documents?.length || 0;
+          const childIsLeaf = !Array.isArray(childNode.children) || childNode.children.length === 0;
+          let count = childIsLeaf ? (childNode.cited_documents?.length || 0) : 0;
           if (childNode.children) {
             childNode.children.forEach(cid => {
               count += countChildCitations(cid);

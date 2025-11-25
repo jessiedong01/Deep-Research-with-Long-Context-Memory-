@@ -604,6 +604,34 @@
   font-style: italic;
 }
 
+.csv-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+}
+
+.csv-table th,
+.csv-table td {
+  border: 1px solid #e5e7eb;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+
+.csv-table th {
+  background: #f9fafb;
+  font-weight: 600;
+  color: #374151;
+}
+
+.csv-table tr:nth-child(even) {
+  background: #f9fafb;
+}
+
+.csv-table tr:hover {
+  background: #f3f4f6;
+}
+
 .node-subtasks-list {
   list-style: none;
   padding: 0;

@@ -8,6 +8,7 @@ This module processes a complete research DAG bottom-up:
 """
 import asyncio
 from collections import deque
+from datetime import datetime
 import dspy
 
 from utils.dataclass import (
@@ -126,56 +127,6 @@ class DAGProcessor:
         self.leaf_researcher = dspy.Predict(LeafNodeResearcher)
         self.parent_synthesizer = dspy.Predict(ParentNodeSynthesizer)
         self._node_results: dict[str, str] = {}
-    
-    @staticmethod
-    def _normalize_answer(expected_format: str | None, answer: str | None) -> str:
-        """Normalize LLM output into the required concise format with citations preserved."""
-        if not answer:
-            return "No answer available."
-        
-        text = answer.strip()
-        if not text:
-            return "No answer available."
-        
-        fmt = (expected_format or "").lower()
-        
-        if fmt in {"boolean", "yes_no"}:
-            lowered = text.lower()
-            verdict = "Yes"
-            if lowered.startswith("no"):
-                verdict = "No"
-            elif lowered.startswith("yes"):
-                verdict = "Yes"
-            else:
-                # Try to infer by keyword
-                verdict = "Yes" if "yes" in lowered and "no" not in lowered else (
-                    "No" if "no" in lowered and "yes" not in lowered else "Unknown"
-                )
-            
-            remainder = text[len(verdict):].strip(" .:-") if verdict in {"Yes", "No"} else text
-            if not remainder:
-                remainder = "Further evidence pending."
-            return f"{verdict}. {remainder}".strip()
-        
-        if fmt in {"list", "bullet", "report", "short_answer"}:
-            lines = []
-            for line in text.splitlines():
-                cleaned = line.strip(" -•\t")
-                if cleaned:
-                    lines.append(f"- {cleaned}")
-            if not lines:
-                lines = [f"- {text}"]
-            return "\n".join(lines)
-        
-        if fmt in {"table_csv", "csv", "json"}:
-            # Preserve structured content as-is
-            return text
-        
-        # Default fallback to bullet list
-        lines = [f"- {line.strip()}" for line in text.splitlines() if line.strip()]
-        if lines:
-            return "\n".join(lines)
-        return f"- {text}"
     
     async def process_dag(
         self,
@@ -377,7 +328,10 @@ class DAGProcessor:
             self.logger.warning(f"Failed to format answer for {node.id}, using raw literature writeup: {e}")
             formatted_answer = lit_response.writeup or "No answer available"
         
-        return self._normalize_answer(node.expected_output_format, formatted_answer)
+        # Handle empty answers
+        if not formatted_answer or not formatted_answer.strip():
+            return "No answer available."
+        return formatted_answer.strip()
     
     async def _process_parent_node(
         self,
@@ -432,7 +386,10 @@ class DAGProcessor:
             synthesized = f"# {node.question}\n\n" + combined_child_results
             node.cited_documents = all_cited_docs
         
-        return self._normalize_answer(node.expected_output_format, synthesized)
+        # Handle empty answers
+        if not synthesized or not synthesized.strip():
+            return "No answer available."
+        return synthesized.strip()
     
     def _save_graph_snapshot(self, graph: ResearchGraph) -> None:
         """Save a snapshot of the graph state for real-time visualization.

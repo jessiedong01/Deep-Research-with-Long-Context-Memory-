@@ -487,6 +487,9 @@ class PresearcherAgentRequest:
     collect_graph: bool = True
     """Whether to build and return the full ResearchGraph structure."""
 
+    prebuilt_graph_path: str | None = None
+    """Optional path to a pre-generated DAG JSON file (skips Phase 1 if provided)."""
+
 @dataclass
 class LiteratureSearchAgentRequest:
     """Request object for Literature Search Agent service.

@@ -41,7 +41,14 @@ export const api = {
   /**
    * Start a new pipeline run
    */
-  async startRun(topic, maxRetrieverCalls = 1, maxDepth = 2, maxNodes = 50, maxSubtasks = 10) {
+  async startRun(
+    topic,
+    maxRetrieverCalls = 1,
+    maxDepth = 2,
+    maxNodes = 50,
+    maxSubtasks = 10,
+    testDagPath = null
+  ) {
     const response = await fetch(`${API_BASE_URL}/api/runs/start`, {
       method: 'POST',
       headers: {
@@ -53,10 +60,56 @@ export const api = {
         max_depth: maxDepth,
         max_nodes: maxNodes,
         max_subtasks: maxSubtasks,
+        test_dag_path: testDagPath,
       }),
     });
     if (!response.ok) {
       throw new Error('Failed to start run');
+    }
+    return response.json();
+  },
+
+  /**
+   * Generate a DAG preview without running the full pipeline
+   */
+  async generateTestDag(topic, maxDepth = 2, maxNodes = 30, maxSubtasks = 5) {
+    const response = await fetch(`${API_BASE_URL}/api/test/generate-dag`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        topic,
+        max_depth: maxDepth,
+        max_nodes: maxNodes,
+        max_subtasks: maxSubtasks,
+      }),
+    });
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(detail || 'Failed to generate DAG preview');
+    }
+    return response.json();
+  },
+
+  /**
+   * List saved test DAGs
+   */
+  async fetchSavedDags() {
+    const response = await fetch(`${API_BASE_URL}/api/test/dags`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch saved DAGs');
+    }
+    return response.json();
+  },
+
+  /**
+   * Fetch the graph for a saved DAG by filename
+   */
+  async fetchSavedDagGraph(filename) {
+    const response = await fetch(`${API_BASE_URL}/api/test/dags/${encodeURIComponent(filename)}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch DAG preview');
     }
     return response.json();
   },

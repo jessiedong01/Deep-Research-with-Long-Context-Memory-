@@ -101,6 +101,7 @@ class StartRunRequest(BaseModel):
     max_depth: int = 2
     max_nodes: int = 50
     max_subtasks: int = 10
+    test_dag_path: str | None = None
 
 
 class StartRunResponse(BaseModel):
@@ -108,6 +109,31 @@ class StartRunResponse(BaseModel):
     run_id: str
     status: RunStatus
     message: str
+
+
+class GenerateDAGRequest(BaseModel):
+    """Request payload for on-demand DAG generation tests."""
+
+    topic: str
+    max_depth: int = 2
+    max_nodes: int = 30
+    max_subtasks: int = 5
+
+
+class SavedDAGInfo(BaseModel):
+    """Metadata about a saved test DAG."""
+
+    filename: str
+    path: str
+    topic: str | None = None
+    timestamp: str | None = None
+    total_nodes: int | None = None
+
+
+class SavedDAGListResponse(BaseModel):
+    """List of available saved DAGs."""
+
+    dags: list[SavedDAGInfo]
 
 
 class PhaseInfo(BaseModel):

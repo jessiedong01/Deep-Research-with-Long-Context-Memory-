@@ -1,0 +1,246 @@
+.dag-test-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.dag-form-card,
+.dag-result-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 1.75rem;
+  box-shadow: 0 15px 35px rgba(15, 23, 42, 0.08);
+}
+
+.dag-form-card h1 {
+  margin-bottom: 0.5rem;
+}
+
+.helper-text {
+  color: #6b7280;
+  margin-bottom: 1.25rem;
+}
+
+.dag-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.dag-form textarea,
+.dag-form input {
+  width: 100%;
+  margin-top: 0.35rem;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  padding: 0.65rem 0.8rem;
+  font-size: 1rem;
+  resize: vertical;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1rem;
+}
+
+.btn-primary {
+  align-self: flex-start;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(99, 102, 241, 0.35);
+}
+
+.error-banner {
+  margin-top: 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.metadata-badges {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.badge {
+  padding: 0.35rem 0.75rem;
+  background: #eef2ff;
+  color: #4338ca;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.dag-result-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+.dag-graph-flow {
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 0.5rem;
+  background: #f9fafb;
+  min-height: 500px;
+}
+
+.dag-graph-flow .recursive-graph-container {
+  height: 520px;
+}
+
+.dag-node-details {
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 1.25rem;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+}
+
+.node-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.close-detail-button {
+  border: none;
+  background: transparent;
+  font-size: 1.25rem;
+  cursor: pointer;
+  color: #9ca3af;
+  transition: color 0.2s ease;
+}
+
+.close-detail-button:hover {
+  color: #4b5563;
+}
+
+.node-detail-content {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.node-detail-section h4 {
+  margin-bottom: 0.5rem;
+  font-size: 0.95rem;
+  color: #374151;
+}
+
+.node-question-full {
+  line-height: 1.5;
+  color: #1f2937;
+}
+
+.node-metadata-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+
+.node-metadata-item {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.9rem;
+}
+
+.node-metadata-item .label {
+  color: #6b7280;
+  margin-bottom: 0.2rem;
+}
+
+.node-metadata-item .value {
+  font-weight: 600;
+  color: #111827;
+}
+
+.node-children-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.child-node-button {
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #1f2937;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.child-node-button:hover {
+  border-color: #818cf8;
+  color: #4338ca;
+}
+
+.node-detail-empty {
+  flex: 1;
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: #9ca3af;
+  text-align: center;
+  gap: 0.75rem;
+}
+
+@media (min-width: 1024px) {
+  .dag-result-body {
+    flex-direction: row;
+  }
+
+  .dag-graph-flow {
+    flex: 2;
+  }
+
+  .dag-node-details {
+    flex: 1;
+    min-width: 320px;
+  }
+}
+
+@media (max-width: 768px) {
+  .dag-form-card,
+  .dag-result-card {
+    padding: 1.25rem;
+  }
+
+  .dag-graph-flow .recursive-graph-container {
+    height: 420px;
+  }
+}

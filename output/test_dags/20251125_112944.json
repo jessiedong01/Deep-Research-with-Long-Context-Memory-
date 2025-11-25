@@ -1,0 +1,223 @@
+{
+  "timestamp": "20251125_112944",
+  "topic": "How can advanced battery chemistries accelerate grid-scale storage deployments?",
+  "max_depth": 2,
+  "max_nodes": 10,
+  "max_subtasks": 3,
+  "graph": {
+    "root_id": "node_1",
+    "nodes": {
+      "node_1": {
+        "id": "node_1",
+        "question": "How can advanced battery chemistries accelerate grid-scale storage deployments?",
+        "parents": [],
+        "children": [
+          "node_2",
+          "node_3",
+          "node_4"
+        ],
+        "status": "pending",
+        "depth": 0,
+        "normalized_question": "how can advanced battery chemistries accelerate grid-scale storage deployments?",
+        "literature_writeup": null,
+        "report": null,
+        "cited_documents": [],
+        "subtasks": [],
+        "composition_explanation": null,
+        "expected_output_format": "report",
+        "composition_instructions": "Integrate findings from sub-questions regarding performance metrics, cost and supply chain dynamics, and deployment enablers and barriers for various chemistries. Summarize mechanisms through which these chemistries enhance scalability, affordability, and resilience of grid-scale storage.",
+        "reused_from_node_id": null,
+        "metadata": {}
+      },
+      "node_2": {
+        "id": "node_2",
+        "question": "What are the performance characteristics of major advanced battery chemistries relevant to grid-scale storage?",
+        "parents": [
+          "node_1"
+        ],
+        "children": [
+          "node_5",
+          "node_6",
+          "node_7"
+        ],
+        "status": "pending",
+        "depth": 1,
+        "normalized_question": "what are the performance characteristics of major advanced battery chemistries relevant to grid-scale storage?",
+        "literature_writeup": null,
+        "report": null,
+        "cited_documents": [],
+        "subtasks": [],
+        "composition_explanation": null,
+        "expected_output_format": "table_csv",
+        "composition_instructions": "Create a comparative table showing energy density, cycle life, efficiency, depth of discharge, and safety characteristics for Li-ion, NaS, Na-ion, flow, zinc-air, and solid-state batteries.",
+        "reused_from_node_id": null,
+        "metadata": {}
+      },
+      "node_3": {
+        "id": "node_3",
+        "question": "How do cost structures and material supply chains influence the scalability of advanced battery chemistries?",
+        "parents": [
+          "node_1"
+        ],
+        "children": [
+          "node_8",
+          "node_9"
+        ],
+        "status": "pending",
+        "depth": 1,
+        "normalized_question": "how do cost structures and material supply chains influence the scalability of advanced battery chemistries?",
+        "literature_writeup": null,
+        "report": null,
+        "cited_documents": [],
+        "subtasks": [],
+        "composition_explanation": null,
+        "expected_output_format": "report",
+        "composition_instructions": "Summarize trends in cost per kWh, material availability, and manufacturing scalability. Discuss how material dependencies (e.g., lithium, sodium, zinc) impact deployment potential.",
+        "reused_from_node_id": null,
+        "metadata": {}
+      },
+      "node_4": {
+        "id": "node_4",
+        "question": "What technical and regulatory factors enable or constrain deployment of advanced chemistries for grid storage?",
+        "parents": [
+          "node_1"
+        ],
+        "children": [
+          "node_10"
+        ],
+        "status": "pending",
+        "depth": 1,
+        "normalized_question": "what technical and regulatory factors enable or constrain deployment of advanced chemistries for grid storage?",
+        "literature_writeup": null,
+        "report": null,
+        "cited_documents": [],
+        "subtasks": [],
+        "composition_explanation": null,
+        "expected_output_format": "list",
+        "composition_instructions": "List key technical, regulatory, and infrastructure-related factors affecting large-scale integration of advanced chemistries.",
+        "reused_from_node_id": null,
+        "metadata": {}
+      },
+      "node_5": {
+        "id": "node_5",
+        "question": "What distinguishes lithium-ion and sodium-sulfur batteries in terms of performance and lifetime for grid-scale use?",
+        "parents": [
+          "node_2"
+        ],
+        "children": [],
+        "status": "pending",
+        "depth": 2,
+        "normalized_question": "what distinguishes lithium-ion and sodium-sulfur batteries in terms of performance and lifetime for grid-scale use?",
+        "literature_writeup": null,
+        "report": null,
+        "cited_documents": [],
+        "subtasks": [],
+        "composition_explanation": null,
+        "expected_output_format": "short_answer",
+        "composition_instructions": null,
+        "reused_from_node_id": null,
+        "metadata": {}
+      },
+      "node_6": {
+        "id": "node_6",
+        "question": "How do sodium-ion and flow batteries compare regarding energy density, efficiency, and cycle life?",
+        "parents": [
+          "node_2"
+        ],
+        "children": [],
+        "status": "pending",
+        "depth": 2,
+        "normalized_question": "how do sodium-ion and flow batteries compare regarding energy density, efficiency, and cycle life?",
+        "literature_writeup": null,
+        "report": null,
+        "cited_documents": [],
+        "subtasks": [],
+        "composition_explanation": null,
+        "expected_output_format": "short_answer",
+        "composition_instructions": null,
+        "reused_from_node_id": null,
+        "metadata": {}
+      },
+      "node_7": {
+        "id": "node_7",
+        "question": "What emerging chemistries (e.g., solid-state, zinc-air) offer potential breakthroughs in grid storage applications?",
+        "parents": [
+          "node_2"
+        ],
+        "children": [],
+        "status": "pending",
+        "depth": 2,
+        "normalized_question": "what emerging chemistries (e.g., solid-state, zinc-air) offer potential breakthroughs in grid storage applications?",
+        "literature_writeup": null,
+        "report": null,
+        "cited_documents": [],
+        "subtasks": [],
+        "composition_explanation": null,
+        "expected_output_format": "list",
+        "composition_instructions": null,
+        "reused_from_node_id": null,
+        "metadata": {}
+      },
+      "node_8": {
+        "id": "node_8",
+        "question": "What are the dominant cost drivers for grid-scale battery storage systems across chemistries?",
+        "parents": [
+          "node_3"
+        ],
+        "children": [],
+        "status": "pending",
+        "depth": 2,
+        "normalized_question": "what are the dominant cost drivers for grid-scale battery storage systems across chemistries?",
+        "literature_writeup": null,
+        "report": null,
+        "cited_documents": [],
+        "subtasks": [],
+        "composition_explanation": null,
+        "expected_output_format": "table_csv",
+        "composition_instructions": null,
+        "reused_from_node_id": null,
+        "metadata": {}
+      },
+      "node_9": {
+        "id": "node_9",
+        "question": "How do supply chain constraints and raw material availability affect deployment timelines of advanced chemistries?",
+        "parents": [
+          "node_3"
+        ],
+        "children": [],
+        "status": "pending",
+        "depth": 2,
+        "normalized_question": "how do supply chain constraints and raw material availability affect deployment timelines of advanced chemistries?",
+        "literature_writeup": null,
+        "report": null,
+        "cited_documents": [],
+        "subtasks": [],
+        "composition_explanation": null,
+        "expected_output_format": "short_answer",
+        "composition_instructions": null,
+        "reused_from_node_id": null,
+        "metadata": {}
+      },
+      "node_10": {
+        "id": "node_10",
+        "question": "What policies and standards are most influential in facilitating deployment of next-generation battery storage?",
+        "parents": [
+          "node_4"
+        ],
+        "children": [],
+        "status": "pending",
+        "depth": 2,
+        "normalized_question": "what policies and standards are most influential in facilitating deployment of next-generation battery storage?",
+        "literature_writeup": null,
+        "report": null,
+        "cited_documents": [],
+        "subtasks": [],
+        "composition_explanation": null,
+        "expected_output_format": "list",
+        "composition_instructions": null,
+        "reused_from_node_id": null,
+        "metadata": {}
+      }
+    }
+  }
+}

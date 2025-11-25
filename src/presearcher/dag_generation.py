@@ -1,142 +1,233 @@
-"""DAG Generation Module for Deep Research Pipeline.
+"""Simplified DAG Generation Module for Deep Research Pipeline.
 
-This module generates a complete research DAG upfront before any actual research is conducted.
-Each node in the DAG contains:
-1. A research task/subtask
-2. The expected output format for that task
-3. A list of child tasks (if any)
-4. Instructions for how to combine child results
+This version generates the entire DAG upfront with a single literature search
+and language-model call. The generated DAG can later be refined during DAG
+processing, so this phase prioritizes speed and coherent first drafts.
 """
+
+from __future__ import annotations
+
+import json
+from typing import Any
+
 import dspy
 
 from utils.dataclass import (
     LiteratureSearchAgentRequest,
-    LiteratureSearchAgentResponse,
     PresearcherAgentRequest,
     ResearchGraph,
     ResearchNode,
-    _normalize_question,
 )
 from utils.literature_search import LiteratureSearchAgent
 from utils.logger import get_logger
 
 
-class ExpectedOutputFormatSignature(dspy.Signature):
-    """Determine the best output format for a research task.
-    
-    The goal is to pick the most appropriate format for answering this specific research question.
-    Prefer structured or short formats over full reports when possible, as they are more precise
-    and easier to compose.
-    
-    Common format types:
-    - boolean: Yes/No answer with brief (1-2 sentence) justification
-    - short_answer: A concise answer in 1-3 sentences
-    - list: A bullet-point list of items (e.g., countries, technologies, key points)
-    - table_csv: Structured tabular data in CSV format (for comparisons, metrics, timelines)
-    - report: A detailed written report (only when the question requires extensive discussion)
-    
-    Choose the simplest format that fully addresses the question. For example:
-    - "Is X better than Y?" → boolean
-    - "What are the main applications of X?" → list
-    - "Compare X, Y, and Z on metrics A, B, C" → table_csv
-    - "Explain the history and implications of X" → report
+_VALID_OUTPUT_FORMATS = {"boolean", "short_answer", "list", "table_csv", "report"}
+
+
+class FullDAGGenerationSignature(dspy.Signature):
+    """Generate a complete research DAG (Directed Acyclic Graph) in one shot.
+
+    You are a research planning expert. Given a research topic and background
+    context from a literature search, decompose the topic into a tree of
+    sub-questions that can be answered independently. The DAG must be
+    JSON-serializable and respect the provided depth/node constraints.
+
+    Guidelines
+    ---------
+    1. Root node: Use the main topic (id="node_0", parent_id=null).
+    2. Decomposition: Break complex questions into focused, standalone
+       sub-questions that collectively answer the parent.
+    3. Output formats: Choose the simplest format that fully answers the
+       question (boolean, short_answer, list, table_csv, report).
+    4. Composition instructions: Non-leaf nodes must describe how to combine
+       the child answers to answer the parent question.
+    5. Constraints: Respect max_depth, max_nodes, max_subtasks.
+
+    Example 1 (simple topic)
+    ------------------------
+    Topic: "What are the health benefits of green tea?"
+    max_depth=2, max_nodes=6, max_subtasks=3
+
+    [
+      {
+        "id": "node_0",
+        "question": "What are the health benefits of green tea?",
+        "parent_id": null,
+        "expected_output_format": "report",
+        "composition_instructions": "Synthesize antioxidant properties, disease prevention evidence, and cognitive effects."
+      },
+      {
+        "id": "node_1",
+        "question": "What antioxidants are present in green tea and what are their biological effects?",
+        "parent_id": "node_0",
+        "expected_output_format": "list",
+        "composition_instructions": ""
+      },
+      {
+        "id": "node_2",
+        "question": "What does clinical research show about green tea consumption and chronic disease prevention?",
+        "parent_id": "node_0",
+        "expected_output_format": "table_csv",
+        "composition_instructions": ""
+      },
+      {
+        "id": "node_3",
+        "question": "How does green tea affect cognitive function and mental health?",
+        "parent_id": "node_0",
+        "expected_output_format": "short_answer",
+        "composition_instructions": ""
+      }
+    ]
+
+    Example 2 (comparative topic)
+    -----------------------------
+    Topic: "How do renewable energy policies in Germany compare to those in the United States?"
+    max_depth=3, max_nodes=10, max_subtasks=3
+
+    [
+      {
+        "id": "node_0",
+        "question": "How do renewable energy policies in Germany compare to those in the United States?",
+        "parent_id": null,
+        "expected_output_format": "report",
+        "composition_instructions": "Compare regulatory frameworks, incentives, and outcomes."
+      },
+      {
+        "id": "node_1",
+        "question": "What are the key regulatory frameworks governing renewable energy in Germany and the United States?",
+        "parent_id": "node_0",
+        "expected_output_format": "table_csv",
+        "composition_instructions": "Create a comparison table with columns: Country, Key Laws, Regulatory Bodies, Mandates."
+      },
+      {
+        "id": "node_2",
+        "question": "What financial incentives exist for renewable energy adoption in Germany versus the United States?",
+        "parent_id": "node_0",
+        "expected_output_format": "table_csv",
+        "composition_instructions": "Merge incentives into a table with columns: Country, Incentive Type, Description, Scale."
+      },
+      {
+        "id": "node_3",
+        "question": "What have been the outcomes of renewable energy policies in Germany compared to the United States?",
+        "parent_id": "node_0",
+        "expected_output_format": "report",
+        "composition_instructions": "Synthesize capacity growth, grid integration, and economic impact data."
+      },
+      {
+        "id": "node_4",
+        "question": "What are Germany's main renewable energy laws and regulatory bodies?",
+        "parent_id": "node_1",
+        "expected_output_format": "list",
+        "composition_instructions": ""
+      },
+      {
+        "id": "node_5",
+        "question": "What are the United States' main renewable energy laws and regulatory bodies at federal and state levels?",
+        "parent_id": "node_1",
+        "expected_output_format": "list",
+        "composition_instructions": ""
+      },
+      {
+        "id": "node_6",
+        "question": "What is the current renewable energy capacity and growth rate in Germany?",
+        "parent_id": "node_3",
+        "expected_output_format": "short_answer",
+        "composition_instructions": ""
+      },
+      {
+        "id": "node_7",
+        "question": "What is the current renewable energy capacity and growth rate in the United States?",
+        "parent_id": "node_3",
+        "expected_output_format": "short_answer",
+        "composition_instructions": ""
+      }
+    ]
+
+    Example 3 (technical deep-dive)
+    -------------------------------
+    Topic: "Is transformer architecture more efficient than RNN for machine translation?"
+    max_depth=2, max_nodes=5, max_subtasks=4
+
+    [
+      {
+        "id": "node_0",
+        "question": "Is transformer architecture more efficient than RNN for machine translation?",
+        "parent_id": null,
+        "expected_output_format": "boolean",
+        "composition_instructions": "Weigh computational efficiency, translation quality, and training requirements."
+      },
+      {
+        "id": "node_1",
+        "question": "What is the computational complexity of transformers versus RNNs for sequence-to-sequence tasks?",
+        "parent_id": "node_0",
+        "expected_output_format": "table_csv",
+        "composition_instructions": ""
+      },
+      {
+        "id": "node_2",
+        "question": "How do BLEU scores compare between transformer and RNN-based machine translation models?",
+        "parent_id": "node_0",
+        "expected_output_format": "short_answer",
+        "composition_instructions": ""
+      },
+      {
+        "id": "node_3",
+        "question": "What are the training time and resource requirements for transformers compared to RNNs?",
+        "parent_id": "node_0",
+        "expected_output_format": "table_csv",
+        "composition_instructions": ""
+      }
+    ]
     """
-    
-    research_task: str = dspy.InputField(
-        description="The research task or question to analyze"
+
+    research_topic: str = dspy.InputField(
+        description="The main research question to decompose into a DAG"
     )
-    
-    context_summary: str = dspy.InputField(
-        description="A brief summary of what is known about this task from a quick literature search"
+
+    literature_summary: str = dspy.InputField(
+        description="Background context from an initial literature search"
     )
-    
-    format_type: str = dspy.OutputField(
-        description="The output format type. Must be exactly one of: boolean, short_answer, list, table_csv, report"
-    )
-    
-    format_details: str = dspy.OutputField(
-        description="Specific details about how to format the answer. For example: "
-                    "'A yes/no with justification', 'A list of 5-10 key applications', "
-                    "'CSV with columns: Country, GDP, Population, Year', etc."
+
+    max_depth: int = dspy.InputField(description="Maximum depth (root depth = 0)")
+    max_nodes: int = dspy.InputField(description="Maximum total number of nodes")
+    max_subtasks: int = dspy.InputField(description="Maximum number of children per node")
+
+    dag_json: str = dspy.OutputField(
+        description=(
+            "JSON array of node objects. Each node requires: id (string), question (string), "
+            "parent_id (string or null), expected_output_format (boolean|short_answer|list|table_csv|report), "
+            "composition_instructions (string, empty for leaves)."
+        )
     )
 
 
-class DAGDecompositionSignature(dspy.Signature):
-    """Decide whether to decompose a research task into subtasks.
-    
-    Given a research task and quick literature search results, decide if this task should be
-    broken down into subtasks or if it can be answered directly from literature search.
-    
-    Decompose when:
-    - The task is complex and has multiple distinct aspects that need separate investigation
-    - The quick literature search shows the topic is broad and multifaceted
-    - Breaking into subtasks would lead to more focused, higher-quality research
-    
-    Do NOT decompose when:
-    - The task is already specific and focused
-    - The quick literature search shows sufficient information is readily available
-    - We've reached reasonable depth or node limits
-    - Further decomposition would be redundant or too granular
-    
-    CRITICAL: Each subtask MUST be phrased as a completely standalone, independent question.
-    - DO NOT reference other subtasks (e.g., avoid "these indicators", "the countries mentioned above")
-    - Include ALL necessary context directly within each subtask
-    - Each subtask should be researchable independently without any other information
+class CompositionInstructionSignature(dspy.Signature):
+    """Write explicit parent composition instructions referencing each child node.
+
+    Given a parent node and its children, explain exactly how the child answers will be
+    combined to produce the parent's output. Always reference children by their IDs so
+    downstream steps can trace dependencies unambiguously.
     """
-    
-    research_task: str = dspy.InputField(
-        description="The research task or question to potentially decompose"
+
+    parent_id: str = dspy.InputField(description="Node id of the parent")
+    parent_question: str = dspy.InputField(description="Parent research question")
+    parent_format: str = dspy.InputField(description="Parent expected output format")
+    child_summaries: str = dspy.InputField(
+        description="Bullet list describing each child in the format `id: question (format)`"
     )
-    
-    quick_search_summary: str = dspy.InputField(
-        description="Summary of findings from a quick literature search on this task"
-    )
-    
-    current_depth: int = dspy.InputField(
-        description="Current depth in the DAG (root is 0)"
-    )
-    
-    max_depth: int = dspy.InputField(
-        description="Maximum allowed depth"
-    )
-    
-    remaining_nodes: int = dspy.InputField(
-        description="Number of nodes remaining in the budget before hitting max_nodes limit"
-    )
-    
-    max_subtasks: int = dspy.InputField(
-        description="Maximum number of subtasks to generate for this node"
-    )
-    
-    should_decompose: bool = dspy.OutputField(
-        description="Whether this task should be decomposed into subtasks. Consider depth/node limits carefully."
-    )
-    
-    subtasks: list[str] = dspy.OutputField(
-        description="List of subtasks (empty if should_decompose is False). Each subtask MUST be a completely "
-                    "standalone question with all necessary context included. DO NOT reference other subtasks. "
-                    "DO NOT exceed max_subtasks."
-    )
-    
+
     composition_instructions: str = dspy.OutputField(
-        description="Step-by-step instructions for how to combine the answers to these subtasks (and ONLY these "
-                    "subtasks, without any external information) to answer the original research task. Be explicit "
-                    "about which subtask answers to use and how to synthesize them. Empty if should_decompose is False."
+        description=(
+            "Detailed instructions that mention individual child ids (e.g., node_5) and specify how to use "
+            "each child's output to build the parent's answer."
+        )
     )
 
 
 class DAGGenerationAgent:
-    """Generates a complete research DAG upfront using breadth-first expansion.
-    
-    This agent:
-    1. Starts with a root question
-    2. For each node, does a quick literature search
-    3. Determines the expected output format for that node
-    4. Decides whether to decompose into subtasks
-    5. Continues breadth-first until reaching depth/node limits
-    6. Returns a complete DAG with all nodes in "pending" status
-    """
-    
+    """Generates a complete research DAG upfront using a single LM call."""
+
     def __init__(
         self,
         literature_search_agent: LiteratureSearchAgent,
@@ -145,204 +236,202 @@ class DAGGenerationAgent:
         self.literature_search_agent = literature_search_agent
         self.lm = lm
         self.logger = get_logger()
-        
-        self.format_predictor = dspy.Predict(ExpectedOutputFormatSignature)
-        self.decomposition_predictor = dspy.Predict(DAGDecompositionSignature)
-    
+        self.dag_generator = dspy.Predict(FullDAGGenerationSignature)
+        self.composition_refiner = dspy.Predict(CompositionInstructionSignature)
+
     async def generate_dag(
         self,
         request: PresearcherAgentRequest,
     ) -> ResearchGraph:
-        """Generate a complete research DAG upfront.
-        
-        Uses breadth-first expansion with deterministic limit enforcement to ensure
-        we don't exceed max_depth or max_nodes constraints.
-        
-        Args:
-            request: PresearcherAgentRequest with topic and constraints
-            
-        Returns:
-            Complete ResearchGraph with all nodes in "pending" status
-        """
-        self.logger.info(f"Starting DAG generation for topic: {request.topic}")
-        self.logger.info(f"Constraints: max_depth={request.max_depth}, max_nodes={request.max_nodes}, max_subtasks={request.max_subtasks}")
-        
-        # Initialize graph with root node
-        graph = ResearchGraph()
-        root_node = graph.get_or_create_node(
-            question=request.topic,
-            parent_id=None,
-            depth=0
+        """Generate a research DAG by combining one literature search with one LM call."""
+        self.logger.info(
+            f"Starting simplified DAG generation for topic={request.topic} "
+            f"(max_depth={request.max_depth}, max_nodes={request.max_nodes}, max_subtasks={request.max_subtasks})"
         )
-        
-        self.logger.info(f"Created root node: {root_node.id}")
-        
-        # Process nodes level by level (breadth-first)
-        current_depth = 0
-        while current_depth < request.max_depth and len(graph.nodes) < request.max_nodes:
-            # Get all nodes at current depth that haven't been processed yet
-            nodes_at_depth = [
-                node for node in graph.nodes.values()
-                if node.depth == current_depth and node.expected_output_format is None
-            ]
-            
-            if not nodes_at_depth:
-                # No more nodes to process at this depth
-                self.logger.info(f"No more nodes at depth {current_depth}, moving to next depth")
-                current_depth += 1
-                continue
-            
-            self.logger.info(f"Processing {len(nodes_at_depth)} nodes at depth {current_depth}")
-            
-            for node in nodes_at_depth:
-                if len(graph.nodes) >= request.max_nodes:
-                    self.logger.warning(f"Reached max_nodes limit ({request.max_nodes}), stopping expansion")
-                    break
-                
-                await self._process_node(
-                    graph=graph,
-                    node=node,
-                    request=request,
-                    current_depth=current_depth,
-                )
-            
-            current_depth += 1
-        
-        self.logger.info(f"DAG generation complete: {len(graph.nodes)} nodes across {current_depth} depths")
-        
-        # Log summary
-        self.logger.save_intermediate_result(
-            "00_dag_generation",
-            graph.to_dict(),
-            {
-                "total_nodes": len(graph.nodes),
-                "max_depth_reached": max(n.depth for n in graph.nodes.values()),
-                "leaf_nodes": len([n for n in graph.nodes.values() if not n.children]),
-            }
-        )
-        
-        return graph
-    
-    async def _process_node(
-        self,
-        graph: ResearchGraph,
-        node: ResearchNode,
-        request: PresearcherAgentRequest,
-        current_depth: int,
-    ) -> None:
-        """Process a single node: determine output format and optionally decompose.
-        
-        Args:
-            graph: The research graph being built
-            node: The node to process
-            request: Original request with constraints
-            current_depth: Current depth in the DAG
-        """
-        self.logger.debug(f"Processing node {node.id}: {node.question}")
-        
-        # Step 1: Quick literature search to inform decisions
-        lit_search_request = LiteratureSearchAgentRequest(
-            topic=node.question,
-            max_retriever_calls=1,  # Quick search
-            guideline="Quick overview to inform task decomposition",
-            with_synthesis=True,
-        )
-        
+
+        literature_summary = "No literature summary available."
         try:
-            lit_search_response = await self.literature_search_agent.aforward(lit_search_request)
-            search_summary = lit_search_response.writeup[:500]  # Use first 500 chars as summary
-        except Exception as e:
-            self.logger.warning(f"Literature search failed for node {node.id}: {e}")
-            search_summary = "No literature search results available"
-        
-        # Step 2: Determine expected output format
-        try:
-            format_result = await self.format_predictor.aforward(
-                research_task=node.question,
-                context_summary=search_summary,
-                lm=self.lm,
+            lit_request = LiteratureSearchAgentRequest(
+                topic=request.topic,
+                max_retriever_calls=2,
+                guideline="Broad overview to inform DAG planning",
+                with_synthesis=True,
             )
-            node.expected_output_format = format_result.format_type.strip().lower()
-            
-            # Validate format type
-            valid_formats = ["boolean", "short_answer", "list", "table_csv", "report"]
-            if node.expected_output_format not in valid_formats:
-                self.logger.warning(f"Invalid format '{node.expected_output_format}', defaulting to 'report'")
-                node.expected_output_format = "report"
-            
-            # Store format details in metadata
-            node.metadata["format_details"] = format_result.format_details
-            
-            self.logger.debug(f"Node {node.id} output format: {node.expected_output_format}")
-        
-        except Exception as e:
-            self.logger.error(f"Failed to determine output format for node {node.id}: {e}")
-            node.expected_output_format = "report"  # Default fallback
-        
-        # Step 3: Decide whether to decompose
-        # Don't decompose if we're at max depth or near max nodes
-        can_decompose = (
-            current_depth < request.max_depth - 1  # Leave room for children
-            and len(graph.nodes) < request.max_nodes - 1  # Leave room for at least one child
-        )
-        
-        if not can_decompose:
-            self.logger.debug(f"Node {node.id} cannot decompose (depth or node limits)")
-            return
-        
-        remaining_nodes = request.max_nodes - len(graph.nodes)
-        
+            lit_response = await self.literature_search_agent.aforward(lit_request)
+            if getattr(lit_response, "writeup", None):
+                literature_summary = lit_response.writeup[:2000]
+        except Exception as exc:  # pragma: no cover - defensive logging
+            self.logger.warning(f"Literature search failed for topic '{request.topic}': {exc}")
+
         try:
-            decomp_result = await self.decomposition_predictor.aforward(
-                research_task=node.question,
-                quick_search_summary=search_summary,
-                current_depth=current_depth,
+            dag_result = await self.dag_generator.aforward(
+                research_topic=request.topic,
+                literature_summary=literature_summary,
                 max_depth=request.max_depth,
-                remaining_nodes=remaining_nodes,
+                max_nodes=request.max_nodes,
                 max_subtasks=request.max_subtasks,
                 lm=self.lm,
             )
-            
-            should_decompose = decomp_result.should_decompose
-            subtasks = decomp_result.subtasks or []
-            composition_instructions = decomp_result.composition_instructions or ""
-            
-            if should_decompose and subtasks:
-                self.logger.debug(f"Node {node.id} decomposing into {len(subtasks)} subtasks")
-                
-                # Limit subtasks to available node budget
-                max_children = min(len(subtasks), request.max_subtasks, remaining_nodes)
-                subtasks = subtasks[:max_children]
-                
-                # Store composition instructions
-                node.composition_instructions = composition_instructions
-                node.subtasks = subtasks
-                
-                # Create child nodes
-                ancestor_questions = set()
-                ancestor_questions.add(node.normalized_question or _normalize_question(node.question))
-                
-                for subtask in subtasks:
-                    if len(graph.nodes) >= request.max_nodes:
-                        break
-                    
-                    # Prevent cycles: don't create a child that's identical to an ancestor
-                    normalized_subtask = _normalize_question(subtask)
-                    if normalized_subtask in ancestor_questions:
-                        self.logger.debug(f"Skipping subtask (cycle detected): {subtask}")
-                        continue
-                    
-                    child_node = graph.get_or_create_node(
-                        question=subtask,
-                        parent_id=node.id,
-                        depth=current_depth + 1,
-                    )
-                    
-                    self.logger.debug(f"Created child node {child_node.id} for parent {node.id}")
-            else:
-                self.logger.debug(f"Node {node.id} will not decompose")
-        
-        except Exception as e:
-            self.logger.error(f"Failed to decompose node {node.id}: {e}")
-            # If decomposition fails, just leave the node as a leaf
+            graph = self._parse_dag_json(dag_result.dag_json, request)
+            await self._refine_composition_instructions(graph)
+        except Exception as exc:
+            self.logger.error(f"Full DAG generation failed; falling back to root-only DAG: {exc}")
+            graph = ResearchGraph()
+            root = graph.get_or_create_node(question=request.topic, parent_id=None, depth=0)
+            root.expected_output_format = "report"
 
+        stats = {
+            "total_nodes": len(graph.nodes),
+            "max_depth_reached": max((node.depth for node in graph.nodes.values()), default=0),
+            "leaf_nodes": len([node for node in graph.nodes.values() if not node.children]),
+        }
+
+        self.logger.save_intermediate_result("00_dag_generation", graph.to_dict(), stats)
+        self.logger.info(
+            f"DAG generation complete with {stats['total_nodes']} nodes (max depth {stats['max_depth_reached']})"
+        )
+        return graph
+
+    async def _refine_composition_instructions(self, graph: ResearchGraph) -> None:
+        """Ensure non-leaf nodes have child-aware composition instructions."""
+        for node in graph.nodes.values():
+            if not node.children:
+                continue
+
+            child_summaries = []
+            for child_id in node.children:
+                child_node = graph.nodes.get(child_id)
+                if not child_node:
+                    continue
+                summary = (
+                    f"{child_id}: {child_node.question} "
+                    f"(format={child_node.expected_output_format or 'unknown'})"
+                )
+                child_summaries.append(summary)
+
+            if not child_summaries:
+                continue
+
+            try:
+                result = await self.composition_refiner.aforward(
+                    parent_id=node.id,
+                    parent_question=node.question,
+                    parent_format=node.expected_output_format or "report",
+                    child_summaries="\n".join(f"- {s}" for s in child_summaries),
+                    lm=self.lm,
+                )
+                node.composition_instructions = result.composition_instructions.strip()
+            except Exception as exc:
+                self.logger.warning(
+                    f"Failed to refine composition instructions for {node.id}: {exc}"
+                )
+                continue
+
+            self._check_format_alignment(node, graph)
+
+    def _check_format_alignment(self, node: ResearchNode, graph: ResearchGraph) -> None:
+        """Log warnings if a parent's expected format is poorly supported by its children."""
+        if not node.children or not node.expected_output_format:
+            return
+
+        child_formats = [
+            (graph.nodes[child_id].expected_output_format or "").lower()
+            for child_id in node.children
+            if child_id in graph.nodes
+        ]
+        child_formats = [fmt for fmt in child_formats if fmt]
+
+        if node.expected_output_format == "table_csv":
+            structured_children = [
+                fmt for fmt in child_formats if fmt in {"table_csv", "list"}
+            ]
+            if not structured_children:
+                self.logger.warning(
+                    f"Parent {node.id} expects table_csv but children provide {child_formats}"
+                )
+
+
+    def _parse_dag_json(
+        self,
+        dag_json: str,
+        request: PresearcherAgentRequest,
+    ) -> ResearchGraph:
+        """Parse DAG JSON emitted by the LM into a ResearchGraph respecting limits."""
+        try:
+            raw_nodes: Any = json.loads(dag_json)
+        except json.JSONDecodeError as exc:  # pragma: no cover - LM output issues
+            raise ValueError(f"Invalid DAG JSON: {exc}") from exc
+
+        if not isinstance(raw_nodes, list):
+            raise ValueError("DAG output must be a JSON array of nodes.")
+
+        graph = ResearchGraph()
+        id_map: dict[str, str] = {}
+        remaining = list(raw_nodes)
+
+        while remaining and len(graph.nodes) < request.max_nodes:
+            progress = False
+            for node_spec in list(remaining):
+                declared_id = str(node_spec.get("id", "")).strip() or None
+                question = (node_spec.get("question") or "").strip()
+                parent_key = node_spec.get("parent_id")
+                expected_format = (node_spec.get("expected_output_format") or "report").strip().lower()
+                composition = (node_spec.get("composition_instructions") or "").strip()
+
+                if not question:
+                    remaining.remove(node_spec)
+                    continue
+
+                if parent_key not in (None, "") and parent_key not in id_map:
+                    continue
+
+                parent_graph_id = id_map.get(parent_key) if parent_key else None
+                parent_depth = graph.nodes[parent_graph_id].depth if parent_graph_id else -1
+                depth = parent_depth + 1
+                if depth > request.max_depth:
+                    self.logger.debug(
+                        "Skipping node '%s' because depth %s exceeds limit %s",
+                        question,
+                        depth,
+                        request.max_depth,
+                    )
+                    remaining.remove(node_spec)
+                    continue
+
+                if len(graph.nodes) >= request.max_nodes:
+                    self.logger.warning("Node budget exhausted while parsing DAG output.")
+                    break
+
+                if expected_format not in _VALID_OUTPUT_FORMATS:
+                    expected_format = "report"
+
+                node = graph.get_or_create_node(
+                    question=question,
+                    parent_id=parent_graph_id,
+                    depth=depth,
+                )
+                node.expected_output_format = expected_format
+                node.composition_instructions = composition or None
+
+                if declared_id:
+                    id_map[declared_id] = node.id
+                remaining.remove(node_spec)
+                progress = True
+
+            if not progress:
+                self.logger.warning(
+                    "Unable to resolve %s DAG nodes due to missing parents or constraints.",
+                    len(remaining),
+                )
+                break
+
+        if not graph.nodes:
+            root = graph.get_or_create_node(question=request.topic, parent_id=None, depth=0)
+            root.expected_output_format = "report"
+
+        if graph.root_id is None:
+            # Ensure the earliest inserted node is root for visualization clarity.
+            first_id = next(iter(graph.nodes))
+            graph.root_id = first_id
+
+        return graph

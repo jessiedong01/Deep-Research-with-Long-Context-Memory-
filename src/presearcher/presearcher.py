@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 import dspy
 
 from presearcher.dag_generation import DAGGenerationAgent
@@ -86,15 +89,31 @@ class PresearcherAgent:
                 "max_depth": request.max_depth,
                 "max_nodes": request.max_nodes,
                 "max_subtasks": request.max_subtasks,
+                "prebuilt_graph_path": request.prebuilt_graph_path,
             },
         )
 
         # ========== PHASE 1: Generate DAG ==========
         self.logger.info("\n" + "=" * 80)
-        self.logger.info("PHASE 1: Generating Research DAG")
-        self.logger.info("=" * 80)
-        
-        graph = await self.dag_generation_agent.generate_dag(request)
+        if request.prebuilt_graph_path:
+            self.logger.info("PHASE 1: Loading Prebuilt DAG")
+            self.logger.info("=" * 80)
+            graph = self._load_prebuilt_graph(request.prebuilt_graph_path)
+            self.logger.save_intermediate_result(
+                "00_dag_generation",
+                graph.to_dict(),
+                {
+                    "total_nodes": len(graph.nodes),
+                    "max_depth_reached": max((n.depth for n in graph.nodes.values()), default=0),
+                    "leaf_nodes": len([n for n in graph.nodes.values() if not n.children]),
+                    "graph_source": "prebuilt",
+                    "prebuilt_graph_path": request.prebuilt_graph_path,
+                },
+            )
+        else:
+            self.logger.info("PHASE 1: Generating Research DAG")
+            self.logger.info("=" * 80)
+            graph = await self.dag_generation_agent.generate_dag(request)
         
         # Save DAG snapshot after generation
         self._save_graph_snapshot(request, graph, graph.root_id)
@@ -171,3 +190,25 @@ class PresearcherAgent:
             root_node_id,
             graph_output,
         )
+
+    def _load_prebuilt_graph(self, dag_path: str) -> ResearchGraph:
+        """Load a prebuilt DAG from disk."""
+        resolved_path = Path(dag_path).expanduser()
+        if not resolved_path.is_absolute():
+            resolved_path = Path.cwd() / resolved_path
+
+        if not resolved_path.exists():
+            raise FileNotFoundError(f"Prebuilt DAG file not found: {resolved_path}")
+
+        with open(resolved_path, "r") as f:
+            payload = json.load(f)
+
+        graph_payload = payload.get("graph") if isinstance(payload, dict) else None
+        if not graph_payload:
+            raise ValueError(f"Invalid DAG file format: {resolved_path}")
+
+        graph = ResearchGraph.from_dict(graph_payload)
+        self.logger.info(
+            f"Loaded prebuilt DAG from {resolved_path} ({len(graph.nodes)} nodes)"
+        )
+        return graph

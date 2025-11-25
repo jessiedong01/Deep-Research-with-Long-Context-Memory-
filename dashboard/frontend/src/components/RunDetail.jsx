@@ -61,6 +61,16 @@ export function RunDetail() {
     loadPhaseData();
   }, [runId]);
 
+  // Sync selectedNode with updated graph data
+  useEffect(() => {
+    if (selectedNode && graph?.graph?.nodes) {
+      const updatedNode = graph.graph.nodes[selectedNode.id];
+      if (updatedNode && updatedNode !== selectedNode) {
+        setSelectedNode(updatedNode);
+      }
+    }
+  }, [graph]);
+
   // Live timer for running tasks
   useEffect(() => {
     if (
@@ -486,25 +496,12 @@ const formatGraphTimestamp = (timestamp) => {
                       </p>
                     </div>
 
-                    <div className="node-detail-section">
-                      <h4>Metadata</h4>
-                      <div className="node-metadata-grid">
-                        <div className="node-metadata-item">
-                          <span className="label">Status:</span>
-                          <span
-                            className={`value status-${selectedNode.status}`}
-                          >
-                            {selectedNode.status}
-                          </span>
-                        </div>
-                        <div className="node-metadata-item">
-                          <span className="label">Depth:</span>
-                          <span className="value">
-                            {selectedNode.depth ?? 0}
-                          </span>
-                        </div>
+                    {selectedNode.composition_instructions && (
+                      <div className="node-detail-section">
+                        <h4>Composition Instructions</h4>
+                        <p>{selectedNode.composition_instructions}</p>
                       </div>
-                    </div>
+                    )}
 
                     {(() => {
                       const rootId = graph?.graph?.root_id;
@@ -524,6 +521,50 @@ const formatGraphTimestamp = (timestamp) => {
                         );
                       }
 
+                      const isCSV = selectedNode.expected_output_format === 'table_csv';
+
+                      const renderCSVTable = (csvText) => {
+                        // Parse CSV properly handling quoted fields
+                        const parseCSVLine = (line) => {
+                          const result = [];
+                          let current = '';
+                          let inQuotes = false;
+                          for (let i = 0; i < line.length; i++) {
+                            const char = line[i];
+                            if (char === '"') {
+                              inQuotes = !inQuotes;
+                            } else if (char === ',' && !inQuotes) {
+                              result.push(current.trim());
+                              current = '';
+                            } else {
+                              current += char;
+                            }
+                          }
+                          result.push(current.trim());
+                          return result;
+                        };
+
+                        const lines = csvText.trim().split('\n');
+                        const headers = parseCSVLine(lines[0]);
+                        const rows = lines.slice(1).map(line => parseCSVLine(line));
+                        return (
+                          <table className="csv-table">
+                            <thead>
+                              <tr>
+                                {headers.map((h, i) => <th key={i}>{h}</th>)}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {rows.map((row, i) => (
+                                <tr key={i}>
+                                  {row.map((cell, j) => <td key={j}>{cell}</td>)}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        );
+                      };
+
                       return (
                         <div className="node-detail-section">
                           <h4>{isRootNode ? "Final Report" : "Answer"}</h4>
@@ -533,7 +574,7 @@ const formatGraphTimestamp = (timestamp) => {
                               : "Summary generated for this sub-question."}
                           </p>
                           <div className="node-markdown-content">
-                            <ReactMarkdown>{nodeAnswer}</ReactMarkdown>
+                            {isCSV ? renderCSVTable(nodeAnswer) : <ReactMarkdown>{nodeAnswer}</ReactMarkdown>}
                           </div>
                         </div>
                       );

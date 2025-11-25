@@ -1,10 +1,23 @@
 """
 FastAPI application for the dashboard backend.
 """
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
+import json
+import sys
 from pathlib import Path
 from typing import Optional
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+
+current_file = Path(__file__).resolve()
+repo_root = current_file.parent.parent.parent
+src_path = repo_root / "src"
+if str(src_path) not in sys.path:
+    sys.path.insert(0, str(src_path))
+
+from presearcher.init_pipeline import init_presearcher_agent
+from presearcher.presearcher import PresearcherAgent
+from utils.dataclass import PresearcherAgentRequest
 
 from .models import (
     RunListResponse,
@@ -12,6 +25,9 @@ from .models import (
     StepDetailResponse,
     StartRunRequest,
     StartRunResponse,
+    GenerateDAGRequest,
+    SavedDAGListResponse,
+    SavedDAGInfo,
     RunStatus,
     GraphResponse,
     PhaseStatusResponse,
@@ -45,8 +61,19 @@ app.add_middleware(
 )
 
 # Initialize scanner and runner
+# Initialize scanner and runner
 scanner = LogScanner()
 runner = get_runner()
+_test_presearcher_agent: PresearcherAgent | None = None
+test_dag_dir = repo_root / "output" / "test_dags"
+
+
+def _get_test_presearcher_agent() -> PresearcherAgent:
+    """Return a cached PresearcherAgent instance for DAG test generation."""
+    global _test_presearcher_agent
+    if _test_presearcher_agent is None:
+        _test_presearcher_agent = init_presearcher_agent()
+    return _test_presearcher_agent
 
 
 def _get_current_node_id(run_id: str) -> Optional[str]:
@@ -195,6 +222,23 @@ async def get_run_graph(run_id: str):
 @app.post("/api/runs/start", response_model=StartRunResponse)
 async def start_run(request: StartRunRequest):
     """Start a new pipeline run."""
+    normalized_path: str | None = None
+    if request.test_dag_path:
+        candidate = Path(request.test_dag_path).expanduser()
+        if not candidate.is_absolute():
+            candidate = (test_dag_dir / candidate).resolve()
+        candidate = candidate.resolve()
+        if not candidate.exists():
+            raise HTTPException(status_code=400, detail="Saved DAG not found on disk.")
+        try:
+            candidate.relative_to(test_dag_dir.resolve())
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail="Saved DAG must reside inside the test_dags folder.",
+            )
+        normalized_path = str(candidate)
+
     try:
         run_id = await runner.start_run(
             topic=request.topic,
@@ -202,6 +246,7 @@ async def start_run(request: StartRunRequest):
             max_depth=request.max_depth,
             max_nodes=request.max_nodes,
             max_subtasks=request.max_subtasks,
+            test_dag_path=normalized_path,
         )
         
         return StartRunResponse(
@@ -211,6 +256,136 @@ async def start_run(request: StartRunRequest):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to start pipeline: {str(e)}")
+
+
+@app.post("/api/test/generate-dag", response_model=GraphResponse)
+async def generate_test_dag(request: GenerateDAGRequest):
+    """Generate a DAG preview without running the full pipeline."""
+    import json as _json
+    from datetime import datetime as _dt
+
+    if not request.topic.strip():
+        raise HTTPException(status_code=400, detail="Topic must not be empty.")
+
+    try:
+        presearcher_agent = _get_test_presearcher_agent()
+        dag_request = PresearcherAgentRequest(
+            topic=request.topic.strip(),
+            max_depth=request.max_depth,
+            max_nodes=request.max_nodes,
+            max_subtasks=request.max_subtasks,
+            collect_graph=True,
+        )
+        graph = await presearcher_agent.dag_generation_agent.generate_dag(dag_request)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to generate DAG: {exc}") from exc
+
+    graph_dict = graph.to_dict()
+    if not graph_dict.get("root_id"):
+        raise HTTPException(status_code=500, detail="Generated DAG is missing a root node.")
+
+    # Persist the test DAG to disk
+    test_dag_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = _dt.now().strftime("%Y%m%d_%H%M%S")
+    dag_file = test_dag_dir / f"{timestamp}.json"
+    with open(dag_file, "w") as f:
+        _json.dump(
+            {
+                "timestamp": timestamp,
+                "topic": request.topic.strip(),
+                "max_depth": request.max_depth,
+                "max_nodes": request.max_nodes,
+                "max_subtasks": request.max_subtasks,
+                "graph": graph_dict,
+            },
+            f,
+            indent=2,
+        )
+
+    metadata = {
+        "total_nodes": len(graph.nodes),
+        "max_depth_requested": request.max_depth,
+        "max_nodes_requested": request.max_nodes,
+        "graph_source": "dag_generation_test",
+        "saved_to": str(dag_file),
+    }
+
+    return GraphResponse(
+        graph=graph_dict,
+        metadata=metadata,
+    )
+
+
+@app.get("/api/test/dags", response_model=SavedDAGListResponse)
+async def list_saved_dags():
+    """List saved test DAGs."""
+    dags: list[SavedDAGInfo] = []
+
+    if not test_dag_dir.exists():
+        return SavedDAGListResponse(dags=[])
+
+    for dag_path in sorted(test_dag_dir.glob("*.json"), reverse=True):
+        topic = None
+        timestamp = None
+        total_nodes: int | None = None
+        try:
+            with dag_path.open("r") as f:
+                payload = json.load(f)
+            if isinstance(payload, dict):
+                topic = payload.get("topic")
+                timestamp = payload.get("timestamp")
+                graph_payload = payload.get("graph") or {}
+                nodes = graph_payload.get("nodes")
+                if isinstance(nodes, dict):
+                    total_nodes = len(nodes)
+        except Exception:
+            pass
+
+        dags.append(
+            SavedDAGInfo(
+                filename=dag_path.name,
+                path=str(dag_path),
+                topic=topic,
+                timestamp=timestamp,
+                total_nodes=total_nodes,
+            )
+        )
+
+    return SavedDAGListResponse(dags=dags)
+
+
+@app.get("/api/test/dags/{filename}", response_model=GraphResponse)
+async def get_saved_dag(filename: str):
+    """Return the graph data for a saved DAG."""
+    dag_path = (test_dag_dir / filename).resolve()
+    try:
+        dag_path.relative_to(test_dag_dir.resolve())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid DAG filename.")
+
+    if not dag_path.exists():
+        raise HTTPException(status_code=404, detail="DAG file not found.")
+
+    try:
+        with dag_path.open("r") as f:
+            payload = json.load(f)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to read DAG: {exc}") from exc
+
+    graph_payload = payload.get("graph")
+    if not graph_payload:
+        raise HTTPException(status_code=500, detail="Saved DAG missing graph payload.")
+
+    metadata = {
+        "topic": payload.get("topic"),
+        "timestamp": payload.get("timestamp"),
+        "saved_path": str(dag_path),
+        "total_nodes": len(graph_payload.get("nodes", {})) if isinstance(graph_payload, dict) else None,
+    }
+
+    return GraphResponse(graph=graph_payload, metadata=metadata)
 
 
 @app.get("/api/runs/{run_id}/phases", response_model=PhaseStatusResponse)

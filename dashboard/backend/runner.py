@@ -69,6 +69,7 @@ class PipelineRunner:
         max_depth: int = 2,
         max_nodes: int = 50,
         max_subtasks: int = 10,
+        test_dag_path: str | None = None,
     ) -> str:
         """
         Start a new pipeline run.
@@ -97,7 +98,11 @@ class PipelineRunner:
             "max_depth": max_depth,
             "max_nodes": max_nodes,
             "max_subtasks": max_subtasks,
+            "test_dag_path": test_dag_path,
         }
+
+        if test_dag_path:
+            logger.info(f"Run configured to reuse prebuilt DAG: {test_dag_path}")
         
         # Start the pipeline in background
         asyncio.create_task(
@@ -108,6 +113,7 @@ class PipelineRunner:
                 max_depth=max_depth,
                 max_nodes=max_nodes,
                 max_subtasks=max_subtasks,
+                test_dag_path=test_dag_path,
                 logger=logger,
             )
         )
@@ -122,6 +128,7 @@ class PipelineRunner:
         max_depth: int,
         max_nodes: int,
         max_subtasks: int,
+        test_dag_path: str | None,
         logger,
     ):
         """Execute the pipeline and broadcast updates."""
@@ -152,6 +159,8 @@ class PipelineRunner:
                 f"max_nodes={max_nodes}, "
                 f"max_subtasks={max_subtasks}"
             )
+            if test_dag_path:
+                logger.info(f"Prebuilt DAG path: {test_dag_path}")
             
             # Run the presearcher pipeline
             await self.broadcast_message(run_id, WebSocketMessage(
@@ -167,6 +176,7 @@ class PipelineRunner:
                     max_depth=max_depth,
                     max_nodes=max_nodes,
                     max_subtasks=max_subtasks,
+                    prebuilt_graph_path=test_dag_path,
                 )
             )
             
