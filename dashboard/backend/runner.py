@@ -174,6 +174,16 @@ class PipelineRunner:
                 data={"step": "01_purpose_generation", "status": "in_progress"}
             ))
             
+            # Create callback to broadcast graph updates via WebSocket
+            def on_graph_update(graph_dict: dict, metadata: dict):
+                asyncio.create_task(
+                    self.broadcast_message(run_id, WebSocketMessage(
+                        type="graph_update",
+                        timestamp=datetime.now(),
+                        data={"graph": graph_dict, "metadata": metadata}
+                    ))
+                )
+            
             presearcher_response: PresearcherAgentResponse = await presearcher_agent.aforward(
                 PresearcherAgentRequest(
                     topic=topic,
@@ -183,7 +193,8 @@ class PipelineRunner:
                     max_subtasks=max_subtasks,
                     max_refinements=max_refinements,
                     prebuilt_graph_path=test_dag_path,
-                )
+                ),
+                on_graph_update=on_graph_update,
             )
             
             # Save results

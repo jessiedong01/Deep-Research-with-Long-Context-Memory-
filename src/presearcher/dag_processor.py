@@ -8,6 +8,7 @@ This module processes a complete research DAG bottom-up:
 """
 import asyncio
 from collections import deque
+from collections.abc import Callable
 from datetime import datetime
 import dspy
 
@@ -183,12 +184,14 @@ class DAGProcessor:
         self.composition_validator = dspy.Predict(CompositionValidator)
         self.gap_filler = dspy.Predict(GapFiller)
         self._node_results: dict[str, str] = {}
+        self._on_graph_update: Callable[[dict, dict], None] | None = None
     
     async def process_dag(
         self,
         graph: ResearchGraph,
         max_retriever_calls: int = 3,
         max_refinements: int = 1,
+        on_graph_update: Callable[[dict, dict], None] | None = None,
     ) -> tuple[ResearchGraph, dict[str, str]]:
         """Process the entire DAG bottom-up.
         
@@ -204,6 +207,7 @@ class DAGProcessor:
         self._node_results = {}
         self._max_retriever_calls = max_retriever_calls
         self._max_refinements = max_refinements
+        self._on_graph_update = on_graph_update
         self.logger.info(f"Total nodes to process: {len(graph.nodes)}")
         self.logger.info(f"Max refinements per node: {max_refinements}")
         
@@ -548,17 +552,26 @@ class DAGProcessor:
             completed = len([n for n in graph.nodes.values() if n.status == "complete"])
             in_progress = len([n for n in graph.nodes.values() if n.status == "in_progress"])
             
+            metadata = {
+                "total_nodes": len(graph.nodes),
+                "completed": completed,
+                "in_progress": in_progress,
+                "source": "snapshot",
+                "snapshot_ts": datetime.utcnow().isoformat(),
+            }
+            
             self.logger.save_intermediate_result(
                 "dag_processing_snapshot",
                 graph.to_dict(),
-                {
-                    "total_nodes": len(graph.nodes),
-                    "completed": completed,
-                    "in_progress": in_progress,
-                    "source": "snapshot",
-                    "snapshot_ts": datetime.utcnow().isoformat(),
-                }
+                metadata,
             )
+            
+            # Notify via callback if provided (for WebSocket updates)
+            if self._on_graph_update is not None:
+                try:
+                    self._on_graph_update(graph.to_dict(), metadata)
+                except Exception as cb_err:
+                    self.logger.warning(f"Graph update callback failed: {cb_err}")
         except Exception as e:
             self.logger.warning(f"Failed to save graph snapshot: {e}")
 

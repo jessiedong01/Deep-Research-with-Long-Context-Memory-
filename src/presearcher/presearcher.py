@@ -1,4 +1,5 @@
 import json
+from collections.abc import Callable
 from pathlib import Path
 
 import dspy
@@ -68,7 +69,11 @@ class PresearcherAgent:
             },
         )
 
-    async def aforward(self, request: PresearcherAgentRequest) -> PresearcherAgentResponse:
+    async def aforward(
+        self,
+        request: PresearcherAgentRequest,
+        on_graph_update: Callable[[dict, dict], None] | None = None,
+    ) -> PresearcherAgentResponse:
         """Run the three-phase research pipeline and return the final report and DAG.
         
         Phase 1: Generate complete DAG upfront
@@ -130,6 +135,7 @@ class PresearcherAgent:
             graph=graph,
             max_retriever_calls=request.max_retriever_calls,
             max_refinements=request.max_refinements,
+            on_graph_update=on_graph_update,
         )
         
         # Save processed DAG snapshot

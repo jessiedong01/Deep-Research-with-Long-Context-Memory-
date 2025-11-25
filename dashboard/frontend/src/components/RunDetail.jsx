@@ -30,20 +30,43 @@ export function RunDetail() {
     runDetail?.metadata?.status === "running" ? runId : null
   );
 
-  // Poll for updates if the run is in progress
+  // Handle WebSocket messages for real-time updates
+  useEffect(() => {
+    if (messages.length === 0) return;
+    
+    const latestMessage = messages[messages.length - 1];
+    
+    if (latestMessage.type === "graph_update" && latestMessage.data) {
+      // Update graph from WebSocket push
+      const { graph: graphData, metadata } = latestMessage.data;
+      if (graphData) {
+        setGraph({ graph: graphData, metadata: { ...metadata, graph_source: "snapshot" } });
+        setGraphError(null);
+        setGraphNotFound(false);
+      }
+    } else if (latestMessage.type === "status_change" && latestMessage.data) {
+      // Refresh run detail when status changes
+      loadRunDetail();
+      if (latestMessage.data.status === "completed" || latestMessage.data.status === "failed") {
+        // Final fetch to get completed state
+        loadGraph();
+        loadPhaseData();
+      }
+    }
+  }, [messages]);
+
+  // Fallback poll every 30s for robustness (in case WebSocket misses updates)
   useEffect(() => {
     if (runDetail?.metadata?.status === "running") {
       const interval = setInterval(() => {
         loadRunDetail();
-        // Only retry loading graph if we haven't received a 404
         if (!graphNotFound) {
           loadGraph();
         }
-        // Also update phase data for three-phase runs
         if (runDetail?.metadata?.is_three_phase) {
           loadPhaseData();
         }
-      }, 5000); // Refresh every 5 seconds
+      }, 30000); // Fallback refresh every 30 seconds
 
       return () => clearInterval(interval);
     }
