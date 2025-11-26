@@ -18,10 +18,17 @@ class OutlineFromDAGSignature(dspy.Signature):
     - Reflect the hierarchical structure of the research
     - Include all major findings from the DAG
     - Be organized logically to support the root answer
-    - Use markdown headings (##, ###, etc.)
+    - Use proper markdown headings: ## for main sections, ### for subsections
+    - Structure sections for prose-based writing (not just bullet lists)
+    - Include an Executive Summary, main body sections, and Conclusion
     
     If the root answer has a specific format (e.g., boolean, list), the outline
-    should support presenting that answer prominently.
+    should support presenting that answer prominently in the Executive Summary.
+    
+    CRITICAL: Base the outline ONLY on content that actually exists in the root_answer.
+    Every section (including any appendix sections) must correspond to actual findings
+    in the root_answer. DO NOT create placeholder sections describing what "should" 
+    or "could" be included - only sections for content that is actually present.
     """
     
     root_question: str = dspy.InputField(
@@ -66,6 +73,21 @@ class ReportFromDAGSignature(dspy.Signature):
     - The report's conclusion must align with the root answer
     
     Do not contradict or hedge against the root answer's stance.
+    
+    FORMATTING REQUIREMENTS:
+    - The report title (# heading) should be the CLAIM, not the question. Convert
+      the question into an assertive statement matching the root answer's stance.
+      Example: "Should X do Y?" with answer "Yes" → title "X Should Do Y"
+    - Use proper markdown: # for title, ## for sections, ### for subsections
+    - Write in prose paragraphs with supporting bullet points where appropriate
+    - DO NOT write the entire report as bullet points
+    - DO NOT include internal node references like (node_5; node_2) in the output
+    - Only use citation numbers like [1], [2], [3] to reference sources
+    - Create clear visual hierarchy with proper heading levels
+    - Each major section should have introductory prose before any lists
+    - Every section must contain actual substantive content from the dag_results
+    - DO NOT write placeholder content describing what "should" or "could" be 
+      included - only write content that actually exists in the provided results
     """
     
     outline: str = dspy.InputField(
@@ -294,7 +316,7 @@ class FinalReportGenerator:
         bibliography = "\n\n## References\n\n"
         for i, doc in enumerate(citations, 1):
             title = doc.title if doc.title else "Untitled"
-            bibliography += f"[{i}] {title} - {doc.url}\n"
+            bibliography += f"[{i}] {title} - {doc.url}\n\n"
         
         return report + bibliography
 

@@ -389,6 +389,30 @@ async def get_saved_dag(filename: str):
     return GraphResponse(graph=graph_payload, metadata=metadata)
 
 
+@app.get("/api/runs/{run_id}/final-report")
+async def get_final_report(run_id: str):
+    """Get the final generated report for a run (from step 3)."""
+    run_dir = scanner.logs_dir / run_id
+    report_file = run_dir / "02_final_report.json"
+    
+    if not report_file.exists():
+        raise HTTPException(status_code=404, detail="Final report not yet generated")
+    
+    try:
+        with report_file.open("r") as f:
+            payload = json.load(f)
+        data = payload.get("data", {})
+        return {
+            "report": data.get("report"),
+            "outline": data.get("outline"),
+            "root_question": data.get("root_question"),
+            "root_format": data.get("root_format"),
+            "num_citations": data.get("num_citations"),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read report: {e}")
+
+
 @app.get("/api/runs/{run_id}/phases", response_model=PhaseStatusResponse)
 async def get_phase_status(run_id: str):
     """Get phase status for a three-phase pipeline run."""

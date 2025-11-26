@@ -7,14 +7,12 @@ This module processes a complete research DAG bottom-up:
 4. Processes sibling nodes in parallel for efficiency
 """
 import asyncio
-from collections import deque
 from collections.abc import Callable
 from datetime import datetime
 import dspy
 
 from utils.dataclass import (
     LiteratureSearchAgentRequest,
-    LiteratureSearchAgentResponse,
     PresearcherAgentRequest,
     ResearchGraph,
     ResearchNode,
@@ -74,7 +72,8 @@ class ParentNodeSynthesizer(dspy.Signature):
     CRITICAL RULES:
     1. Use ONLY the information from the child results - no external knowledge
     2. Follow the composition instructions exactly
-    3. Preserve all citations from child results
+    3. When citing evidence, use the citation numbers [1], [2], etc. from the 
+       AVAILABLE CITATIONS section - do NOT reference child nodes by name
     4. Output in the specified format
     5. If child results contradict, acknowledge and explain the contradiction
     
@@ -89,8 +88,8 @@ class ParentNodeSynthesizer(dspy.Signature):
     )
     
     child_results: str = dspy.InputField(
-        description="The formatted answers from all child subtasks with their citations. "
-                    "Format: 'Child 1: [question]\n[answer]\n\nChild 2: [question]\n[answer]...'"
+        description="The formatted answers from all child subtasks, followed by an "
+                    "AVAILABLE CITATIONS section listing all sources as [1], [2], etc."
     )
     
     composition_instructions: str = dspy.InputField(
@@ -107,30 +106,32 @@ class ParentNodeSynthesizer(dspy.Signature):
     
     synthesized_answer: str = dspy.OutputField(
         description="The synthesized answer combining all child results according to composition "
-                    "instructions, in the required format, preserving all citations"
+                    "instructions, in the required format. Use [1], [2], etc. citation numbers."
     )
 
 
 class CompositionValidator(dspy.Signature):
     """Validate whether a composed answer sufficiently addresses the research question.
     
+    IMPORTANT: Your default should be to return EMPTY STRING. Only flag gaps in 
+    exceptional cases where the answer fundamentally fails to address the question.
+    
     CONTEXT: This system answers questions via internet/literature search only.
-    It can find and summarize existing information but CANNOT perform original
-    calculations, run models, or generate new quantitative analysis.
+    It cannot perform calculations, run models, or generate original analysis.
     
-    Given the original research question and the composed answer from child nodes,
-    determine if there are any critical information gaps that would prevent
-    fully answering the question.
+    RETURN EMPTY STRING (no gaps) if:
+    - The answer provides a reasonable, defensible response with evidence
+    - The answer addresses the main thrust of the question, even if imperfectly
+    - Minor details, edge cases, or "nice to have" information is missing
+    - The answer is good enough to inform a decision or understanding
+    - You're unsure whether something is truly a critical gap
     
-    Be conservative: only flag gaps that are truly critical AND could realistically
-    be filled by finding information online. Do NOT flag gaps for:
-    - Specific numeric calculations or model outputs
-    - Original quantitative analysis requiring computation
-    - Data that would require running simulations
-    - Highly granular details when general coverage exists
+    ONLY flag a gap if:
+    - The answer completely misses a CORE aspect of the question
+    - The answer would be misleading or wrong without this information
+    - A reasonable reader would say "this doesn't answer the question at all"
     
-    If the answer covers the topic qualitatively with available sources, consider it sufficient.
-    If the answer is sufficient, return an empty string for missing_topics.
+    Good enough IS good enough. Default to empty string.
     """
     
     research_question: str = dspy.InputField(
@@ -141,8 +142,14 @@ class CompositionValidator(dspy.Signature):
         description="The answer composed from child node results"
     )
     
+    is_sufficient: bool = dspy.OutputField(
+        description="True if the answer is good enough (covers main aspects adequately). "
+                    "Default to True unless there's a critical, glaring omission."
+    )
+    
     missing_topics: str = dspy.OutputField(
-        description="A comma-separated list of 1-3 specific missing topics that would fill critical gaps, or empty string if the answer is sufficient."
+        description="ONLY if is_sufficient is False: 1-2 critical missing topics. "
+                    "If is_sufficient is True, return empty string."
     )
 
 
@@ -176,6 +183,7 @@ class DAGProcessor:
         self.composition_validator = dspy.Predict(CompositionValidator)
         self._node_results: dict[str, str] = {}
         self._on_graph_update: Callable[[dict, dict], None] | None = None
+        self._max_node_attempts = 2  # default: one retry
     
     async def process_dag(
         self,
@@ -304,53 +312,39 @@ class DAGProcessor:
         max_retriever_calls: int,
         gap_depth: int = 0,
     ) -> None:
-        """Process a single node: either research (leaf) or synthesize (parent).
-        
-        Args:
-            graph: The research graph
-            node_id: ID of the node to process
-            max_retriever_calls: Max retriever calls for literature search
-            gap_depth: Current depth of gap-filling recursion
-        """
+        """Process a single node with automatic reset and retry semantics."""
         node = graph.nodes[node_id]
+        max_attempts = getattr(self, "_max_node_attempts", 2)
+        last_error: Exception | None = None
         
-        self.logger.debug(f"Processing node {node_id}: {node.question}")
-        
-        result_text = ""
-        try:
-            if not node.children:
-                # Leaf node: conduct literature search and format answer
-                result_text = await self._process_leaf_node(
-                    node,
-                    max_retriever_calls,
-                )
-            else:
-                # Parent node: synthesize child results
-                result_text = await self._process_parent_node(graph, node, gap_depth=gap_depth)
+        for attempt in range(1, max_attempts + 1):
+            self.logger.info(f"Processing node {node_id} attempt {attempt}/{max_attempts}")
+            self._reset_node_state(node)
+            node.status = "in_progress"
             
-            self._node_results[node_id] = result_text
-            node.metadata = dict(node.metadata)
-            node.metadata["answer"] = result_text
-            if graph.root_id and node_id == graph.root_id:
-                node.report = result_text
-            else:
-                node.report = None
-            node.literature_writeup = None
-            node.status = "complete"
-            self.logger.debug(f"Node {node_id} complete")
+            try:
+                if not node.children:
+                    result_text = await self._process_leaf_node(
+                        node,
+                        max_retriever_calls,
+                    )
+                else:
+                    result_text = await self._process_parent_node(
+                        graph,
+                        node,
+                        gap_depth=gap_depth,
+                    )
+                
+                self._record_node_success(node, result_text, graph)
+                self.logger.debug(f"Node {node_id} complete on attempt {attempt}")
+                return
+            except Exception as exc:
+                last_error = exc
+                self.logger.error(f"Attempt {attempt} failed for node {node_id}: {exc}")
         
-        except Exception as e:
-            self.logger.error(f"Failed to process node {node_id}: {e}")
-            node.status = "failed"
-            error_text = f"ERROR: Processing failed: {str(e)}"
-            self._node_results[node_id] = error_text
-            node.metadata = dict(node.metadata)
-            node.metadata["answer"] = error_text
-            if graph.root_id and node_id == graph.root_id:
-                node.report = error_text
-            else:
-                node.report = None
-            node.literature_writeup = None
+        error_detail = str(last_error) if last_error else "Unknown error"
+        error_text = f"ERROR: Processing failed after {max_attempts} attempts: {error_detail}"
+        self._record_node_failure(node, error_text, graph)
     
     async def _process_leaf_node(
         self,
@@ -421,6 +415,7 @@ class DAGProcessor:
         Args:
             graph: The research graph
             node: The parent node to process
+            research_task: Standalone version of the parent question
         """
         self.logger.debug(f"Parent node {node.id}: synthesizing {len(node.children)} children")
         
@@ -443,7 +438,24 @@ class DAGProcessor:
                 # Collect cited documents from children
                 all_cited_docs.extend(child.cited_documents)
             
+            # Build unified citation list for the model to reference
+            citation_text_lines = []
+            seen_urls = set()
+            deduplicated_docs = []
+            for doc in all_cited_docs:
+                if doc.url not in seen_urls:
+                    seen_urls.add(doc.url)
+                    deduplicated_docs.append(doc)
+                    idx = len(deduplicated_docs)
+                    citation_text_lines.append(f"[{idx}] {doc.title} - {doc.url}")
+
+            # Replace the node's cited_documents with deduplicated list
+            all_cited_docs = deduplicated_docs
+
+            citations_reference = "\n".join(citation_text_lines) if citation_text_lines else "No citations available."
+            
             combined_child_results = "\n".join(child_results_text)
+            combined_child_results += f"\n\n--- AVAILABLE CITATIONS ---\n{citations_reference}"
             
             # Synthesize using composition instructions
             format_details = node.metadata.get("format_details", "")
@@ -500,10 +512,18 @@ class DAGProcessor:
                     lm=self.lm,
                 )
                 
-                missing_topics = validation.missing_topics.strip() if validation.missing_topics else ""
+                # Use is_sufficient boolean as the primary check
+                is_sufficient = getattr(validation, 'is_sufficient', True)
+                if isinstance(is_sufficient, str):
+                    is_sufficient = is_sufficient.lower() in ('true', 'yes', '1')
                 
-                if not missing_topics:
+                if is_sufficient:
                     self.logger.debug(f"Parent node {node.id}: answer is sufficient, no refinement needed")
+                    break
+                
+                missing_topics = validation.missing_topics.strip() if validation.missing_topics else ""
+                if not missing_topics:
+                    self.logger.debug(f"Parent node {node.id}: marked insufficient but no topics provided, skipping refinement")
                     break
                 
                 self.logger.info(f"Parent node {node.id}: gaps detected - {missing_topics}")
@@ -518,7 +538,7 @@ class DAGProcessor:
             
             # Generate subtree to fill gaps using DAGGenerationAgent with restrictive params
             try:
-                gap_topic = f"Research to address: {missing_topics} (in context of: {node.question})"
+                gap_topic = f"{node.question} - Fill critical gaps: {missing_topics}"
                 subtree_request = PresearcherAgentRequest(
                     topic=gap_topic,
                     max_depth=1,      # Shallow subtree
@@ -725,6 +745,41 @@ class DAGProcessor:
                     self._save_graph_snapshot(graph)
                     await self._process_node(graph, nid, max_retriever_calls, gap_depth=gap_depth)
                     self._save_graph_snapshot(graph)
+    
+    def _reset_node_state(self, node: ResearchNode) -> None:
+        """Reset transient node state before a retry attempt."""
+        node.metadata = dict(node.metadata)
+        node.metadata.pop("answer", None)
+        self._node_results.pop(node.id, None)
+        node.cited_documents = []
+        node.literature_writeup = None
+        node.report = None
+        node.status = "pending"
+    
+    def _record_node_success(self, node: ResearchNode, result_text: str, graph: ResearchGraph) -> None:
+        """Persist bookkeeping for a successfully processed node."""
+        self._node_results[node.id] = result_text
+        node.metadata = dict(node.metadata)
+        node.metadata["answer"] = result_text
+        node.literature_writeup = None
+        if graph.root_id and node.id == graph.root_id:
+            node.report = result_text
+        else:
+            node.report = None
+        node.status = "complete"
+    
+    def _record_node_failure(self, node: ResearchNode, error_text: str, graph: ResearchGraph) -> None:
+        """Persist bookkeeping for a failed node."""
+        self._node_results[node.id] = error_text
+        node.metadata = dict(node.metadata)
+        node.metadata["answer"] = error_text
+        node.cited_documents = []
+        node.literature_writeup = None
+        if graph.root_id and node.id == graph.root_id:
+            node.report = error_text
+        else:
+            node.report = None
+        node.status = "failed"
     
     def _save_graph_snapshot(self, graph: ResearchGraph) -> None:
         """Save a snapshot of the graph state for real-time visualization.

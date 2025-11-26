@@ -1,0 +1,30 @@
+{
+  "timestamp": "20251125_234036",
+  "topic": "The United States federal government should substantially increase social services for persons living in poverty in the United States.",
+  "max_depth": 2,
+  "max_nodes": 15,
+  "max_subtasks": 2,
+  "graph": {
+    "root_id": "node_1",
+    "nodes": {
+      "node_1": {
+        "id": "node_1",
+        "question": "The United States federal government should substantially increase social services for persons living in poverty in the United States.",
+        "parents": [],
+        "children": [],
+        "status": "pending",
+        "depth": 0,
+        "normalized_question": "the united states federal government should substantially increase social services for persons living in poverty in the united states.",
+        "literature_writeup": null,
+        "report": null,
+        "cited_documents": [],
+        "subtasks": [],
+        "composition_explanation": null,
+        "expected_output_format": "list",
+        "composition_instructions": null,
+        "reused_from_node_id": null,
+        "metadata": {}
+      }
+    }
+  }
+}

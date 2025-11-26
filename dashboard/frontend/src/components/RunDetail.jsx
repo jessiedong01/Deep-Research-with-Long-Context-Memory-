@@ -24,6 +24,7 @@ export function RunDetail() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [phaseData, setPhaseData] = useState(null);
   const [phaseLoading, setPhaseLoading] = useState(false);
+  const [finalReport, setFinalReport] = useState(null);
 
   // Connect WebSocket for real-time updates if run is active
   const { messages } = useWebSocket(
@@ -57,6 +58,7 @@ export function RunDetail() {
         // Final fetch to get completed state
         loadGraph();
         loadPhaseData();
+        loadFinalReport();
       }
     }
   }, [messages]);
@@ -88,6 +90,7 @@ export function RunDetail() {
     loadRunDetail();
     loadGraph();
     loadPhaseData();
+    loadFinalReport();
   }, [runId]);
 
   // Sync selectedNode with updated graph data
@@ -177,6 +180,16 @@ export function RunDetail() {
     }
   };
 
+  const loadFinalReport = async () => {
+    try {
+      const data = await api.fetchFinalReport(runId);
+      setFinalReport(data);
+    } catch (err) {
+      console.error("Error loading final report:", err);
+      setFinalReport(null);
+    }
+  };
+
   const formatDate = (dateStr) => {
     if (!dateStr) return "N/A";
     const date = new Date(dateStr);
@@ -263,28 +276,6 @@ export function RunDetail() {
 
     return bestId;
   }, [graph, runDetail?.metadata?.status]);
-
-  // Get the root node and check if it has a completed report
-  const rootNodeReport = useMemo(() => {
-    if (!graph || !graph.graph) return null;
-
-    const { nodes, root_id: rootId } = graph.graph;
-    if (!nodes || !rootId) return null;
-
-    const rootNode = nodes[rootId];
-    if (!rootNode) return null;
-
-    const status =
-      typeof rootNode.status === "string"
-        ? rootNode.status.toLowerCase()
-        : "pending";
-
-    if (status === "complete" || status === "completed") {
-      return rootNode.report || null;
-    }
-
-    return null;
-  }, [graph]);
 
   // Determine current activity message
   const getActivityMessage = () => {
@@ -710,11 +701,11 @@ export function RunDetail() {
           </div>
         </section>
 
-        {rootNodeReport && (
+        {finalReport?.report && (
           <section className="final-report-panel">
             <h2>Final Research Report</h2>
             <div className="final-report-content">
-              <ReactMarkdown>{rootNodeReport}</ReactMarkdown>
+              <ReactMarkdown>{finalReport.report}</ReactMarkdown>
             </div>
           </section>
         )}

@@ -399,10 +399,7 @@ class DAGGenerationAgent:
                 depth = parent_depth + 1
                 if depth > request.max_depth:
                     self.logger.debug(
-                        "Skipping node '%s' because depth %s exceeds limit %s",
-                        question,
-                        depth,
-                        request.max_depth,
+                        f"Skipping node '{question}' because depth {depth} exceeds limit {request.max_depth}"
                     )
                     remaining.remove(node_spec)
                     continue

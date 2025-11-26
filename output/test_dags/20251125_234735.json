@@ -1,0 +1,159 @@
+{
+  "timestamp": "20251125_234735",
+  "topic": "The United States federal government should substantially increase social services for persons living in poverty in the United States.",
+  "max_depth": 2,
+  "max_nodes": 15,
+  "max_subtasks": 2,
+  "graph": {
+    "root_id": "node_1",
+    "nodes": {
+      "node_1": {
+        "id": "node_1",
+        "question": "Should the United States federal government substantially increase social services for persons living in poverty in the United States?",
+        "parents": [],
+        "children": [
+          "node_2",
+          "node_5"
+        ],
+        "status": "pending",
+        "depth": 0,
+        "normalized_question": "should the united states federal government substantially increase social services for persons living in poverty in the united states?",
+        "literature_writeup": null,
+        "report": null,
+        "cited_documents": [],
+        "subtasks": [],
+        "composition_explanation": null,
+        "expected_output_format": "list",
+        "composition_instructions": "Produce a concise bulleted list that answers the parent question (should the federal government substantially increase social services for persons living in poverty?). Use the outputs of the two child nodes as follows \u2014 reference each child by its id every time you draw on it so downstream readers can trace evidence.\n\nStructure and order (all bullets \u2014 keep each bullet short, 1\u20132 sentences where possible):\n\n1) Recommendation (1 bullet)\n- Start with a clear yes / no / conditional recommendation (one sentence). Immediately follow that sentence with a parenthetical citation to the child(s) that most directly support the recommendation (e.g., \"(see node_2, node_5)\").\n\n2) Key facts about the current landscape and unmet needs (2\u20134 bullets)\n- Use node_2 as the sole source for these bullets. Summarize the most relevant facts and gaps that create the policy problem (e.g., coverage gaps, inadequacy of benefit levels, populations left out, administrative barriers). After each bullet add \"(node_2)\".\n\n3) Likely effects, costs, and practical implications of increasing services (3\u20135 bullets)\n- Use node_5 as the source. Summarize expected outcomes (poverty reduction, health, employment), fiscal costs or ranges, and administrative/practical implementation issues. Include quantitative estimates or ranges if node_5 provides them; if node_5 contains sensitivity analyses or scenario variants, note the range and driver of variation. Append \"(node_5)\" to each bullet.\n\n4) Trade-offs and net-benefit assessment (2\u20133 bullets)\n- Combine evidence from node_2 and node_5 to explain the main benefits versus the main costs/risks (e.g., reductions in poverty and long-term human-capital gains versus short-term fiscal costs and potential labor-supply effects). Cite both nodes in each bullet when using both (e.g., \"(node_2; node_5)\").\n\n5) Design and implementation recommendations to maximize benefits and limit harms (2\u20134 bullets)\n- Use node_5 for practical implications and node_2 for unmet needs to propose design features (targeting, phasing, evaluation, enforcement, funding sources). For each proposed feature, indicate which child informed it, e.g., \"(informed by node_5; node_2)\".\n\n6) Key uncertainties and research or data gaps that matter for the decision (1\u20132 bullets)\n- List the largest uncertainties highlighted in node_5 or gaps in node_2 that could change the recommendation, and cite the relevant child(s) after each bullet.\n\n7) Conditional/implementation checklist that would make you more confident in the recommendation (1 bullet)\n- State specific conditions or evidence (from node_5 and/or node_2) that would justify adopting or scaling back the policy (funding plan, pilot results, evaluation metrics). Cite the child(s).\n\nFormatting and synthesis rules:\n- Every bullet that uses facts or estimates must include the child id(s) used in that bullet.\n- If node_2 and node_5 conflict on a point, include a short bullet noting the conflict, explain plausible reasons (different assumptions, time horizons, outcomes modeled), and cite both nodes.\n- Prefer concise, policy-relevant language; do not include long methodological digressions. If quantitative numbers are included, indicate their source child id.\n- The final output must be a list only (no paragraphs outside bullets), and should be no more than 12 bullets total.\n\nUse this mapping when composing each bullet:\n- For baseline facts and unmet needs -> pull from node_2 and label \"(node_2)\".\n- For projections, cost estimates, and implementation implications -> pull from node_5 and label \"(node_5)\".\n- For synthesis, trade-offs, and actionable recommendations -> combine node_2 + node_5 and label \"(node_2; node_5)\".",
+        "reused_from_node_id": null,
+        "metadata": {}
+      },
+      "node_2": {
+        "id": "node_2",
+        "question": "What is the current federal social services landscape for persons living in poverty and what unmet needs remain?",
+        "parents": [
+          "node_1"
+        ],
+        "children": [
+          "node_3",
+          "node_4"
+        ],
+        "status": "pending",
+        "depth": 1,
+        "normalized_question": "what is the current federal social services landscape for persons living in poverty and what unmet needs remain?",
+        "literature_writeup": null,
+        "report": null,
+        "cited_documents": [],
+        "subtasks": [],
+        "composition_explanation": null,
+        "expected_output_format": "list",
+        "composition_instructions": "Produce a concise bulleted list (the parent's required \"list\" format) that directly synthesizes the factual program descriptions from node_3 and the gap/barrier findings from node_4. Every bullet must identify which child node(s) supplied the information by including the child id in parentheses (e.g., \"(node_3)\" or \"(node_4)\" or \"(node_3, node_4)\"), so that each statement\u2019s provenance is explicit.\n\nFollow these step-by-step instructions for assembling the parent output for node_2:\n\n1. Program-level bullets\n   - For each federal program described in node_3 (SNAP, Medicaid, TANF, WIC, child nutrition programs, housing assistance, federal tax credits such as EITC/CTC, and any other programs listed in node_3), create one bullet that:\n     a. Names the program.\n     b. Summarizes scope/target population, key eligibility rules, typical benefit level(s), and major administrative features (e.g., federal/state roles, waivers, recertification, asset tests) \u2014 all drawn from node_3. Immediately append \"(node_3)\".\n     c. Immediately follow with a brief sentence (1\u20132 lines) summarizing the specific measurable gaps or barriers that affect that program\u2019s coverage/adequacy/take-up, using the findings from node_4. Append \"(gaps: node_4)\". If node_4 supplies numeric measures of unmet need for that program, include those figures in this sentence and cite \"(node_4)\".\n\n   - Example structure for each program bullet:\n     \"Program X \u2014 one-line summary of scope, eligibility, benefits, admin features. (node_3) Related unmet needs: [who is uncovered / benefit adequacy / administrative barriers / take-up rate], [quantitative measure if available]. (gaps: node_4)\"\n\n2. Cross-cutting synthesis bullets\n   - After the program-level bullets, include several bullets that synthesize cross-cutting themes that span multiple programs. Use node_3 for factual descriptions of program design features and node_4 for evidence on gaps and barriers. Each bullet must cite both nodes appropriately, e.g., \"(node_3, node_4)\".\n   - Important cross-cutting topics to cover (each as a separate bullet):\n     a. Coverage gaps and excluded/underserved groups (e.g., noncitizens, working poor above eligibility thresholds, homeless or precariously housed households) \u2014 cite node_4 for which groups are uncovered and node_3 if design features explain exclusion.\n     b. Benefit adequacy (how benefits compare to poverty/need thresholds; common shortfalls) \u2014 cite node_4 for measures of adequacy and node_3 for benefit design.\n     c. Administrative and nonfinancial barriers (complex applications, documentation, churn, recertification, stigma, access in rural/remote areas) \u2014 cite node_4 for evidence and node_3 for the administrative features that create these barriers.\n     d. Program fragmentation and interaction problems (cliffs, lack of coordination, inconsistent state implementation, Medicaid expansion differences) \u2014 cite node_3 for structural details and node_4 for impacts.\n     e. Data and measurement limitations noted in node_4 (gaps in evidence, where better data are needed) \u2014 cite node_4.\n\n3. Prioritization and measurable unmet needs\n   - Conclude with 2\u20133 short bullets that prioritize the most critical unmet needs (highest population affected or largest shortfall in benefits) and list concrete, measurable indicators that would show improvement (e.g., % of eligible population reached, take-up rate, poverty gap reduction, median replacement rate). Use node_4 for ranking/prioritization and any numeric evidence; reference node_3 where needed for baseline program parameters. Mark these bullets \"(node_4)\" or \"(node_3, node_4)\" as appropriate.\n\n4. Provenance and transparency\n   - Every bullet must explicitly include the relevant child id(s) at the end of the bullet or clause, so downstream users can trace statements back to node_3 and/or node_4.\n   - If a program in node_3 has no corresponding gap information in node_4, still include the program-level bullet and note \"(no specific gaps reported in node_4)\" with the node_3 citation.\n   - If node_4 identifies gaps or groups but node_3 lacks program detail needed to explain them, note that the gap is reported in node_4 and flag that further program detail is missing from node_3 (e.g., \"program design detail not in node_3\"). Cite node_4 and note the missing provenance.\n\n5. Style and length constraints\n   - Keep each bullet concise (one to three sentences).\n   - Limit the total number of bullets to a focused, readable list (suggested 10\u201315 bullets total): one per major program (approx. 6\u20139), 3\u20134 cross-cutting bullets, and 2\u20133 prioritization/metrics bullets.\n   - Avoid heavy formatting; plain bullets only. But ensure clarity by keeping program names bolded or capitalized in the text (if formatting not available, capitalize program names).\n\n6. Traceable mapping appendix (optional short bullet)\n   - Add a final single-line bullet that lists which child nodes contributed to which sections, e.g., \"Source mapping: program descriptions -> node_3; gaps/metrics/priorities -> node_4.\" Include child ids \"(node_3, node_4)\".\n\nUsing these instructions, produce the parent list for node_2 that (a) summarizes the current federal social services landscape program-by-program (from node_3), (b) ties measurable gaps and barriers to the relevant programs and populations (from node_4), and (c) ends with a short prioritized set of unmet needs with measurable indicators \u2014 all bullets annotated with the child ids for provenance.",
+        "reused_from_node_id": null,
+        "metadata": {}
+      },
+      "node_3": {
+        "id": "node_3",
+        "question": "Which federal programs serve people in poverty and what are their scope, target populations, eligibility rules, benefit levels, and administrative features (e.g., SNAP, Medicaid, TANF, WIC, child nutrition, housing assistance, tax credits)?",
+        "parents": [
+          "node_2"
+        ],
+        "children": [],
+        "status": "pending",
+        "depth": 2,
+        "normalized_question": "which federal programs serve people in poverty and what are their scope, target populations, eligibility rules, benefit levels, and administrative features (e.g., snap, medicaid, tanf, wic, child nutrition, housing assistance, tax credits)?",
+        "literature_writeup": null,
+        "report": null,
+        "cited_documents": [],
+        "subtasks": [],
+        "composition_explanation": null,
+        "expected_output_format": "list",
+        "composition_instructions": null,
+        "reused_from_node_id": null,
+        "metadata": {}
+      },
+      "node_4": {
+        "id": "node_4",
+        "question": "What measurable gaps and barriers remain: who is uncovered or underserved, how adequate are benefit levels, and what administrative or nonfinancial barriers limit access?",
+        "parents": [
+          "node_2"
+        ],
+        "children": [],
+        "status": "pending",
+        "depth": 2,
+        "normalized_question": "what measurable gaps and barriers remain: who is uncovered or underserved, how adequate are benefit levels, and what administrative or nonfinancial barriers limit access?",
+        "literature_writeup": null,
+        "report": null,
+        "cited_documents": [],
+        "subtasks": [],
+        "composition_explanation": null,
+        "expected_output_format": "list",
+        "composition_instructions": null,
+        "reused_from_node_id": null,
+        "metadata": {}
+      },
+      "node_5": {
+        "id": "node_5",
+        "question": "What would be the likely effects, costs, and practical implications of substantially increasing federal social services?",
+        "parents": [
+          "node_1"
+        ],
+        "children": [
+          "node_6",
+          "node_7"
+        ],
+        "status": "pending",
+        "depth": 1,
+        "normalized_question": "what would be the likely effects, costs, and practical implications of substantially increasing federal social services?",
+        "literature_writeup": null,
+        "report": null,
+        "cited_documents": [],
+        "subtasks": [],
+        "composition_explanation": null,
+        "expected_output_format": "list",
+        "composition_instructions": "Construct the parent's answer as a clear, numbered list that synthesizes the two child outputs. For traceability, every bullet or sub-bullet must explicitly cite which child node(s) provided the underlying material by including the child id in parentheses (e.g., \"(see node_6)\" or \"(see node_7)\"). Use the following structure and rules when combining node_6 and node_7:\n\n1) Brief lead sentence (1 bullet)\n- Provide a one-sentence summary of the overall question and note that the synthesis draws on empirical effects (node_6) and fiscal/administrative implications (node_7). Cite both children: (see node_6; node_7).\n\n2) Empirical effects and likely outcomes (several bullets) \u2014 use node_6 as the primary source\n- Summarize core causal/observational findings by domain in separate bullets: poverty reduction, material hardship, health, education, and labor-market outcomes. For each domain:\n  - Begin with a one-line headline stating the typical effect (direction and qualitative magnitude).\n  - Follow with 1\u20132 sub-bullets giving quantitative estimates or ranges when node_6 provides them (e.g., percent point reductions, effect sizes, durations), and note key population groups or heterogeneous effects if reported.\n  - Add a final sub-bullet indicating the confidence/quality of evidence (high/medium/low) and the main study designs backing it (RCTs, quasi-experimental, longitudinal).\n- Tag each domain bullet with \"(see node_6)\". If node_7 contains relevant corroborating evidence (e.g., program interactions affecting outcomes), append \"(see node_7)\" as well.\n\n3) Fiscal costs and funding options (several bullets) \u2014 use node_7 as the primary source\n- Provide bullets that present:\n  - Estimated gross annual and multi-year fiscal costs or cost ranges for \"large-scale expansions\" as reported in node_7 (include per-beneficiary or per-household estimates if available). Tag \"(see node_7)\".\n  - Plausible funding options (e.g., tax increases, reallocation, deficit financing), with short bullets about estimated feasibility and distributional consequences for each option. Tag \"(see node_7)\".\n  - Any cost offsets or fiscal multipliers mentioned in node_7 (e.g., reduced health spending, increased tax revenues from labor-market effects) and their estimated magnitudes. Tag \"(see node_7)\".\n\n4) Administrative capacity, implementation timeline, and practical logistics (bullets) \u2014 use node_7\n- Summarize required administrative resources (staffing, IT, eligibility verification), typical implementation timelines, and likely bottlenecks as described in node_7.\n- Note any scale-up examples or historical precedents and lessons (explicitly cite node_7).\n- Tag these bullets \"(see node_7)\".\n\n5) Unintended consequences, tradeoffs, and interactions (combined synthesis)\n- Create bullets that synthesize tradeoffs by combining evidence from both children:\n  - Labor-supply effects: present empirical findings from node_6 on labor-market responses and link to node_7\u2019s discussion of tradeoffs and program interactions (cite both: \"(see node_6; node_7)\").\n  - Program interactions and targeting: note how expansions may interact with existing programs and affect marginal incentives (cite node_7 primarily, and node_6 if it reports observed interactions).\n  - Fraud, leakages, and administrative errors: summarize risks and scale from node_7, and note whether node_6 documents any measured impacts from these problems.\n- For each tradeoff bullet include a short mitigation or design option if node_7 or node_6 mentions one (e.g., phase-in, conditionalities, tighter verification), and tag sources.\n\n6) Net assessment and likely overall effects (1\u20132 bullets)\n- Provide a concise synthesis weighing benefits (from node_6) against costs and implementation limits (from node_7). State under what conditions the net benefits are likeliest (e.g., well-targeted programs, adequate administration).\n- Cite both nodes: \"(see node_6; node_7)\".\n\n7) Policy-relevant practical implications and recommendations (several bullets)\n- Offer actionable implications for policymakers: priority design choices, staging/phase-in strategy, monitoring and evaluation needs, funding choices that minimize adverse distributional effects. Base recommendations on node_7\u2019s administrative/fiscal analysis and node_6\u2019s evidence on effectiveness. Tag each recommendation with the relevant child id(s).\n\n8) Uncertainties and research gaps (1\u20132 bullets)\n- List the main evidence gaps and uncertainties that prevent stronger conclusions (e.g., long-term outcomes, heterogeneous effects for subgroups, scalability of pilot results). Reference node_6 for empirical gaps and node_7 for gaps in implementation evidence. Tag \"(see node_6; node_7)\".\n\nFormatting and evidence rules\n- Produce a list (numbered top-level bullets). Within items, use short sub-bullets for numbers, ranges, confidence levels, or mitigation strategies.\n- Do not introduce any new empirical estimates beyond what node_6 and node_7 provide. If a child provides multiple, divergent estimates, present the range and explicitly note the source child id.\n- Where possible, include numeric estimates and ranges, and always indicate confidence (high/medium/low) tied to the child id.\n- If the two children conflict, present the conflict explicitly and cite both ids, then, if possible, explain why they differ (differences in methods, populations, or assumptions).\n- Every top-level bullet must end with a parenthetical citation to the child id(s) that provided the information (e.g., \"(see node_6)\" or \"(see node_6; node_7)\").\n\nDeliver the final synthesized list so reviewers can trace every claim back to node_6 or node_7 unambiguously.",
+        "reused_from_node_id": null,
+        "metadata": {}
+      },
+      "node_6": {
+        "id": "node_6",
+        "question": "What does causal and observational research indicate about the effects of expanding social services on poverty reduction, material hardship, health, education, and labor-market outcomes?",
+        "parents": [
+          "node_5"
+        ],
+        "children": [],
+        "status": "pending",
+        "depth": 2,
+        "normalized_question": "what does causal and observational research indicate about the effects of expanding social services on poverty reduction, material hardship, health, education, and labor-market outcomes?",
+        "literature_writeup": null,
+        "report": null,
+        "cited_documents": [],
+        "subtasks": [],
+        "composition_explanation": null,
+        "expected_output_format": "list",
+        "composition_instructions": null,
+        "reused_from_node_id": null,
+        "metadata": {}
+      },
+      "node_7": {
+        "id": "node_7",
+        "question": "What are the estimated fiscal costs of large-scale expansions, plausible funding options, expected administrative capacity requirements, and potential unintended consequences or tradeoffs (e.g., effects on labor supply, program interactions, fraud, and political feasibility)?",
+        "parents": [
+          "node_5"
+        ],
+        "children": [],
+        "status": "pending",
+        "depth": 2,
+        "normalized_question": "what are the estimated fiscal costs of large-scale expansions, plausible funding options, expected administrative capacity requirements, and potential unintended consequences or tradeoffs (e.g., effects on labor supply, program interactions, fraud, and political feasibility)?",
+        "literature_writeup": null,
+        "report": null,
+        "cited_documents": [],
+        "subtasks": [],
+        "composition_explanation": null,
+        "expected_output_format": "list",
+        "composition_instructions": null,
+        "reused_from_node_id": null,
+        "metadata": {}
+      }
+    }
+  }
+}

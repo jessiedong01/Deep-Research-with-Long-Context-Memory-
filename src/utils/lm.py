@@ -193,8 +193,9 @@ def init_lm(lm_config: LanguageModelProviderConfig) -> dspy.LM:
         "model": lm_config.model_name,
         "temperature": lm_config.temperature,
         "max_tokens": lm_config.max_tokens,
-        "timeout": 60,   # Prevent hanging indefinitely on failed requests
+        "timeout": 120,   # Prevent hanging indefinitely on failed requests
         "cache": True,   # Enable response caching for efficiency
+        "num_retries": 3,  # Retry on failures/timeouts
     }
     # Add optional parameters if specified
     if lm_config.top_p is not None:

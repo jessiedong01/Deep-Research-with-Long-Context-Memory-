@@ -47,14 +47,14 @@ class TestLeafNodeResearcher:
         """Test that signature has all required fields."""
         sig = LeafNodeResearcher
         
-        # Input fields
-        assert hasattr(sig, 'research_task')
-        assert hasattr(sig, 'literature_search_results')
-        assert hasattr(sig, 'expected_format')
-        assert hasattr(sig, 'format_details')
+        # Input fields (dspy exposes via model_fields)
+        assert 'research_task' in sig.model_fields
+        assert 'literature_search_results' in sig.model_fields
+        assert 'expected_format' in sig.model_fields
+        assert 'format_details' in sig.model_fields
         
         # Output fields
-        assert hasattr(sig, 'formatted_answer')
+        assert 'formatted_answer' in sig.model_fields
 
 
 class TestParentNodeSynthesizer:
@@ -64,15 +64,15 @@ class TestParentNodeSynthesizer:
         """Test that signature has all required fields."""
         sig = ParentNodeSynthesizer
         
-        # Input fields
-        assert hasattr(sig, 'research_task')
-        assert hasattr(sig, 'child_results')
-        assert hasattr(sig, 'composition_instructions')
-        assert hasattr(sig, 'expected_format')
-        assert hasattr(sig, 'format_details')
+        # Input fields (dspy exposes via model_fields)
+        assert 'research_task' in sig.model_fields
+        assert 'child_results' in sig.model_fields
+        assert 'composition_instructions' in sig.model_fields
+        assert 'expected_format' in sig.model_fields
+        assert 'format_details' in sig.model_fields
         
         # Output fields
-        assert hasattr(sig, 'synthesized_answer')
+        assert 'synthesized_answer' in sig.model_fields
 
 
 class TestDAGProcessor:
@@ -225,11 +225,10 @@ class TestDAGProcessor:
         node.metadata["format_details"] = "Yes/No with reason"
         
         # Process the node
-        await processor._process_leaf_node(node, max_retriever_calls=1)
+        result = await processor._process_leaf_node(node, max_retriever_calls=1)
         
-        # Verify
-        assert node.literature_writeup is not None
-        assert node.report == "Test formatted answer"
+        # Verify - literature_writeup is now cleared; answer stored in return value
+        assert result == "Test formatted answer"
         assert len(node.cited_documents) > 0
         assert lit_agent.aforward.called
     

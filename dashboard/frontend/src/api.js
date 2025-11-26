@@ -159,4 +159,18 @@ export const api = {
     }
     return response.json();
   },
+
+  /**
+   * Fetch the final generated report for a run
+   */
+  async fetchFinalReport(runId) {
+    const response = await fetch(`${API_BASE_URL}/api/runs/${runId}/final-report`);
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null; // Report not yet generated
+      }
+      throw new Error(`Failed to fetch final report for run ${runId}`);
+    }
+    return response.json();
+  },
 };
