@@ -1,16 +1,16 @@
 /**
  * Component to start a new pipeline run
  */
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { api } from '../api';
-import { useWebSocket } from '../hooks/useWebSocket';
-import { RecursiveGraphTree } from './RecursiveGraphTree';
-import './NewRunForm.css';
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { api } from "../api";
+import { useWebSocket } from "../hooks/useWebSocket";
+import { RecursiveGraphTree } from "./RecursiveGraphTree";
+import "./NewRunForm.css";
 
 export function NewRunForm() {
   const navigate = useNavigate();
-  const [topic, setTopic] = useState('');
+  const [topic, setTopic] = useState("");
   const [maxRetrieverCalls, setMaxRetrieverCalls] = useState(1);
   const [maxDepth, setMaxDepth] = useState(2);
   const [maxNodes, setMaxNodes] = useState(50);
@@ -22,8 +22,8 @@ export function NewRunForm() {
   const [savedDags, setSavedDags] = useState([]);
   const [savedDagsLoading, setSavedDagsLoading] = useState(true);
   const [savedDagError, setSavedDagError] = useState(null);
-  const [selectedDagPath, setSelectedDagPath] = useState('');
-  const [selectedDagFilename, setSelectedDagFilename] = useState('');
+  const [selectedDagPath, setSelectedDagPath] = useState("");
+  const [selectedDagFilename, setSelectedDagFilename] = useState("");
   const [dagPreview, setDagPreview] = useState(null);
   const [dagPreviewLoading, setDagPreviewLoading] = useState(false);
   const [dagPreviewError, setDagPreviewError] = useState(null);
@@ -41,7 +41,7 @@ export function NewRunForm() {
         }
       } catch (err) {
         if (!cancelled) {
-          setSavedDagError(err.message || 'Failed to load saved DAGs');
+          setSavedDagError(err.message || "Failed to load saved DAGs");
         }
       } finally {
         if (!cancelled) {
@@ -50,7 +50,9 @@ export function NewRunForm() {
       }
     }
     loadSavedDags();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -69,7 +71,7 @@ export function NewRunForm() {
         if (!cancelled) setDagPreview(data);
       } catch (err) {
         if (!cancelled) {
-          setDagPreviewError(err.message || 'Failed to load DAG preview');
+          setDagPreviewError(err.message || "Failed to load DAG preview");
           setDagPreview(null);
         }
       } finally {
@@ -77,13 +79,15 @@ export function NewRunForm() {
       }
     }
     loadPreview();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [selectedDagFilename]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!topic.trim()) {
-      setError('Please enter a research topic');
+      setError("Please enter a research topic");
       return;
     }
     try {
@@ -106,7 +110,8 @@ export function NewRunForm() {
     }
   };
 
-  const latestStatus = messages.length > 0 ? messages[messages.length - 1] : null;
+  const latestStatus =
+    messages.length > 0 ? messages[messages.length - 1] : null;
 
   // Rendering helpers
   const renderDagSelector = () => (
@@ -124,10 +129,10 @@ export function NewRunForm() {
             setSelectedDagPath(value);
             if (value) {
               const selected = savedDags.find((d) => d.path === value);
-              setSelectedDagFilename(selected?.filename || '');
+              setSelectedDagFilename(selected?.filename || "");
               if (selected?.topic) setTopic(selected.topic);
             } else {
-              setSelectedDagFilename('');
+              setSelectedDagFilename("");
             }
           }}
           disabled={isSubmitting || savedDags.length === 0}
@@ -135,14 +140,16 @@ export function NewRunForm() {
           <option value="">Generate a new DAG</option>
           {savedDags.map((dag) => (
             <option key={dag.path} value={dag.path}>
-              {dag.timestamp || dag.filename} — {dag.topic || 'Untitled'} ({dag.total_nodes ?? '?'} nodes)
+              {dag.timestamp || dag.filename} — {dag.topic || "Untitled"} (
+              {dag.total_nodes ?? "?"} nodes)
             </option>
           ))}
         </select>
       )}
       {savedDagError && <p className="error-text">{savedDagError}</p>}
       <p className="muted">
-        Selecting a saved DAG skips Phase 1 and reuses the decomposition from the Test DAG page.
+        Selecting a saved DAG skips Phase 1 and reuses the decomposition from
+        the Test DAG page.
       </p>
     </div>
   );
@@ -168,7 +175,9 @@ export function NewRunForm() {
             type="number"
             id="maxRetrieverCalls"
             value={maxRetrieverCalls}
-            onChange={(e) => setMaxRetrieverCalls(parseInt(e.target.value, 10) || 1)}
+            onChange={(e) =>
+              setMaxRetrieverCalls(parseInt(e.target.value, 10) || 1)
+            }
             min={1}
             max={20}
             disabled={isSubmitting}
@@ -216,7 +225,9 @@ export function NewRunForm() {
             type="number"
             id="maxRefinements"
             value={maxRefinements}
-            onChange={(e) => setMaxRefinements(parseInt(e.target.value, 10) || 0)}
+            onChange={(e) =>
+              setMaxRefinements(parseInt(e.target.value, 10) || 0)
+            }
             min={0}
             max={5}
             disabled={isSubmitting}
@@ -234,7 +245,9 @@ export function NewRunForm() {
           <h2>DAG Preview</h2>
           {dagPreview?.metadata?.topic && <p>{dagPreview.metadata.topic}</p>}
           {dagPreview?.metadata?.total_nodes != null && (
-            <span className="pill">{dagPreview.metadata.total_nodes} nodes</span>
+            <span className="pill">
+              {dagPreview.metadata.total_nodes} nodes
+            </span>
           )}
         </header>
         <div className="dag-preview-graph">
@@ -256,7 +269,9 @@ export function NewRunForm() {
     <div className="submitting-state">
       <div className="spinner" />
       <h2>Pipeline Starting...</h2>
-      <p>Run ID: <code>{runId}</code></p>
+      <p>
+        Run ID: <code>{runId}</code>
+      </p>
       {isConnected && (
         <div className="connection-badge">
           <span className="dot" />
@@ -265,7 +280,8 @@ export function NewRunForm() {
       )}
       {latestStatus && (
         <div className="latest-update">
-          <strong>{latestStatus.type}:</strong> {latestStatus.data?.message || JSON.stringify(latestStatus.data)}
+          <strong>{latestStatus.type}:</strong>{" "}
+          {latestStatus.data?.message || JSON.stringify(latestStatus.data)}
         </div>
       )}
       {messages.length > 0 && (
@@ -274,9 +290,13 @@ export function NewRunForm() {
           <ul>
             {messages.slice(-8).map((msg, idx) => (
               <li key={idx}>
-                <span className="time">{new Date(msg.timestamp).toLocaleTimeString()}</span>
+                <span className="time">
+                  {new Date(msg.timestamp).toLocaleTimeString()}
+                </span>
                 <span className="type">{msg.type}</span>
-                <span className="text">{msg.data?.message || JSON.stringify(msg.data)}</span>
+                <span className="text">
+                  {msg.data?.message || JSON.stringify(msg.data)}
+                </span>
               </li>
             ))}
           </ul>
@@ -287,7 +307,7 @@ export function NewRunForm() {
   );
 
   return (
-    <div className={`new-run-page ${selectedDagPath ? 'with-preview' : ''}`}>
+    <div className={`new-run-page ${selectedDagPath ? "with-preview" : ""}`}>
       {isSubmitting ? (
         renderSubmittingState()
       ) : (
@@ -299,10 +319,18 @@ export function NewRunForm() {
               {!selectedDagPath && renderConfigFields()}
               {error && <p className="error-text">{error}</p>}
               <div className="form-actions">
-                <button type="button" className="btn secondary" onClick={() => navigate('/')}>
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={() => navigate("/")}
+                >
                   Cancel
                 </button>
-                <button type="submit" className="btn primary" disabled={isSubmitting}>
+                <button
+                  type="submit"
+                  className="btn primary"
+                  disabled={isSubmitting}
+                >
                   Start Pipeline
                 </button>
               </div>

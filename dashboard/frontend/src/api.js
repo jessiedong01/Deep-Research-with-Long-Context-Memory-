@@ -2,7 +2,7 @@
  * API client for the dashboard backend
  */
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = "http://localhost:8000";
 
 export const api = {
   /**
@@ -11,7 +11,7 @@ export const api = {
   async fetchRuns() {
     const response = await fetch(`${API_BASE_URL}/api/runs`);
     if (!response.ok) {
-      throw new Error('Failed to fetch runs');
+      throw new Error("Failed to fetch runs");
     }
     return response.json();
   },
@@ -31,7 +31,9 @@ export const api = {
    * Fetch data for a specific step in a run
    */
   async fetchStepDetail(runId, stepName) {
-    const response = await fetch(`${API_BASE_URL}/api/runs/${runId}/step/${stepName}`);
+    const response = await fetch(
+      `${API_BASE_URL}/api/runs/${runId}/step/${stepName}`
+    );
     if (!response.ok) {
       throw new Error(`Failed to fetch step ${stepName}`);
     }
@@ -51,9 +53,9 @@ export const api = {
     testDagPath = null
   ) {
     const response = await fetch(`${API_BASE_URL}/api/runs/start`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         topic,
@@ -66,7 +68,7 @@ export const api = {
       }),
     });
     if (!response.ok) {
-      throw new Error('Failed to start run');
+      throw new Error("Failed to start run");
     }
     return response.json();
   },
@@ -76,9 +78,9 @@ export const api = {
    */
   async generateTestDag(topic, maxDepth = 2, maxNodes = 30, maxSubtasks = 5) {
     const response = await fetch(`${API_BASE_URL}/api/test/generate-dag`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         topic,
@@ -89,7 +91,7 @@ export const api = {
     });
     if (!response.ok) {
       const detail = await response.text();
-      throw new Error(detail || 'Failed to generate DAG preview');
+      throw new Error(detail || "Failed to generate DAG preview");
     }
     return response.json();
   },
@@ -100,7 +102,7 @@ export const api = {
   async fetchSavedDags() {
     const response = await fetch(`${API_BASE_URL}/api/test/dags`);
     if (!response.ok) {
-      throw new Error('Failed to fetch saved DAGs');
+      throw new Error("Failed to fetch saved DAGs");
     }
     return response.json();
   },
@@ -109,9 +111,11 @@ export const api = {
    * Fetch the graph for a saved DAG by filename
    */
   async fetchSavedDagGraph(filename) {
-    const response = await fetch(`${API_BASE_URL}/api/test/dags/${encodeURIComponent(filename)}`);
+    const response = await fetch(
+      `${API_BASE_URL}/api/test/dags/${encodeURIComponent(filename)}`
+    );
     if (!response.ok) {
-      throw new Error('Failed to fetch DAG preview');
+      throw new Error("Failed to fetch DAG preview");
     }
     return response.json();
   },
@@ -156,4 +160,3 @@ export const api = {
     return response.json();
   },
 };
-

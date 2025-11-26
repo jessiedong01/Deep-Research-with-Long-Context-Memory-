@@ -344,17 +344,95 @@ class TestDAGProcessor:
         assert doc2 in root.cited_documents
 
 
+class TestMergeSubtree:
+    """Tests for _merge_subtree method."""
+    
+    def _create_mock_literature_search_agent(self):
+        """Create mock literature search agent."""
+        mock_agent = Mock()
+        mock_agent.aforward = AsyncMock()
+        return mock_agent
+    
+    def _create_mock_lm(self):
+        """Create mock language model."""
+        return Mock()
+    
+    def test_merge_subtree_creates_new_nodes(self):
+        """Test that _merge_subtree creates fresh nodes instead of reusing existing ones."""
+        lit_agent = self._create_mock_literature_search_agent()
+        lm = self._create_mock_lm()
+        processor = DAGProcessor(literature_search_agent=lit_agent, lm=lm)
+        
+        # Create main graph with a parent node
+        main_graph = ResearchGraph()
+        parent = main_graph.get_or_create_node("Parent question", parent_id=None, depth=0)
+        parent.expected_output_format = "list"
+        
+        # Create subtree graph
+        subtree = ResearchGraph()
+        subtree_root = subtree.get_or_create_node("Subtree root", parent_id=None, depth=0)
+        subtree_root.expected_output_format = "list"
+        subtree_child = subtree.get_or_create_node("Subtree child", parent_id=subtree_root.id, depth=1)
+        subtree_child.expected_output_format = "list"
+        
+        # Merge subtree
+        new_ids = processor._merge_subtree(main_graph, subtree, parent.id, iteration=0)
+        
+        # Verify new nodes were created with prefixed IDs
+        assert len(new_ids) == 2
+        for new_id in new_ids:
+            assert new_id.startswith(f"{parent.id}_gap0_")
+            assert new_id in main_graph.nodes
+        
+        # Verify parent-child relationships are correct
+        assert len(parent.children) >= 1
+        
+    def test_merge_subtree_no_self_referential_children(self):
+        """Test that _merge_subtree excludes self-referential children."""
+        lit_agent = self._create_mock_literature_search_agent()
+        lm = self._create_mock_lm()
+        processor = DAGProcessor(literature_search_agent=lit_agent, lm=lm)
+        
+        # Create main graph
+        main_graph = ResearchGraph()
+        parent = main_graph.get_or_create_node("Parent", parent_id=None, depth=0)
+        
+        # Create subtree with a self-referential node (simulating bad LLM output)
+        subtree = ResearchGraph()
+        bad_node = ResearchNode(
+            id="node_0",
+            question="Bad node",
+            parents=[],
+            children=["node_0"],  # Self-reference!
+            status="pending",
+            depth=0,
+        )
+        subtree.nodes["node_0"] = bad_node
+        subtree.root_id = "node_0"
+        
+        # Merge - should not crash and should exclude self-reference
+        new_ids = processor._merge_subtree(main_graph, subtree, parent.id, iteration=0)
+        
+        # Verify the new node doesn't have itself as a child
+        assert len(new_ids) == 1
+        new_node = main_graph.nodes[new_ids[0]]
+        assert new_ids[0] not in new_node.children
+
+
 def run_tests_manually():
     """Run async tests manually without pytest."""
     import traceback
     
     test_class = TestDAGProcessor()
+    merge_test_class = TestMergeSubtree()
     
     # Sync tests
     sync_tests = [
         ("test_processor_initialization", test_class.test_processor_initialization),
         ("test_topological_sort_simple_graph", test_class.test_topological_sort_simple_graph),
         ("test_topological_sort_deeper_graph", test_class.test_topological_sort_deeper_graph),
+        ("test_merge_subtree_creates_new_nodes", merge_test_class.test_merge_subtree_creates_new_nodes),
+        ("test_merge_subtree_no_self_referential_children", merge_test_class.test_merge_subtree_no_self_referential_children),
     ]
     
     # Async tests

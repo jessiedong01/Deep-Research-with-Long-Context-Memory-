@@ -484,6 +484,12 @@ class PresearcherAgentRequest:
     max_refinements: int = 1
     """Maximum backtracking iterations per node for gap-filling (0 = disabled)."""
 
+    dag_gen_retriever_calls: int = 1
+    """Number of retriever calls for initial DAG generation literature search."""
+
+    gap_fill_retriever_calls: int = 0
+    """Number of retriever calls for gap-filling subtree generation (0 = skip literature search)."""
+
     reuse_existing_nodes: bool = True
     """Whether to reuse existing nodes for identical normalized questions."""
 

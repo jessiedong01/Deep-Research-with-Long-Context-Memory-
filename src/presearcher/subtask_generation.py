@@ -9,6 +9,12 @@ class SubtaskGenerationAgent(dspy.Signature):
     - Generate an explanation for how to compose ONLY those subtasks, without relying on any other knowledge,
       to answer the original research task.
 
+    IMPORTANT CONSTRAINT: Subtasks will be answered via internet/literature search only.
+    - Only ask for information that can be FOUND in existing sources (articles, papers, reports, databases)
+    - Do NOT ask for original calculations, simulations, or quantitative modeling
+    - Do NOT ask for predictions requiring custom analysis
+    - Focus on "what does the literature say about X" rather than "compute X"
+
     CRITICAL REQUIREMENT - Each subtask MUST be phrased as a standalone, independent question:
     - DO NOT reference other subtasks (e.g., avoid "these indicators", "the countries mentioned above", "based on the previous")
     - Each question must be completely self-contained and researchable on its own

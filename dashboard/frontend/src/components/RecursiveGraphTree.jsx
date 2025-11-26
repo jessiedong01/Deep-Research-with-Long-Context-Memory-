@@ -101,8 +101,22 @@ function ResearchNode({ data, selected }) {
       />
       <div className="node-header">
         {isActive && <div className="spinner-icon" />}
-        {isRefining && <span className="refining-icon" title="Refining: filling information gaps">🔄</span>}
-        {isRefinementChild && <span className="refinement-child-icon" title={`Added in refinement iteration ${refinementIteration}`}>🔁</span>}
+        {isRefining && (
+          <span
+            className="refining-icon"
+            title="Refining: filling information gaps"
+          >
+            🔄
+          </span>
+        )}
+        {isRefinementChild && (
+          <span
+            className="refinement-child-icon"
+            title={`Added in refinement iteration ${refinementIteration}`}
+          >
+            🔁
+          </span>
+        )}
         <span
           className="status-badge"
           style={{
@@ -119,20 +133,22 @@ function ResearchNode({ data, selected }) {
           {expectedOutputFormat && (
             <>
               <span className="divider">•</span>
-              <span
-                className="format-badge"
-                title={expectedOutputFormat}
-              >
-                {getOutputFormatIcon(expectedOutputFormat)} {expectedOutputFormat}
+              <span className="format-badge" title={expectedOutputFormat}>
+                {getOutputFormatIcon(expectedOutputFormat)}{" "}
+                {expectedOutputFormat}
               </span>
             </>
           )}
           {(directCitations > 0 || childrenCitations > 0) && (
             <>
               <span className="divider">•</span>
-              <span 
-                className="citation-badge" 
-                title={`Sources: ${directCitations} direct${childrenCitations > 0 ? ` (+ ${childrenCitations} from children)` : ''}`}
+              <span
+                className="citation-badge"
+                title={`Sources: ${directCitations} direct${
+                  childrenCitations > 0
+                    ? ` (+ ${childrenCitations} from children)`
+                    : ""
+                }`}
               >
                 📚 {directCitations}
                 {childrenCitations > 0 && ` (+${childrenCitations})`}
@@ -233,25 +249,28 @@ export function RecursiveGraphTree({
 
       // Calculate citation counts
       // Only leaf nodes have direct citations; intermediate nodes inherit from children
-      const isLeaf = !Array.isArray(node.children) || node.children.length === 0;
-      const directCitations = isLeaf ? (node.cited_documents?.length || 0) : 0;
-      
+      const isLeaf =
+        !Array.isArray(node.children) || node.children.length === 0;
+      const directCitations = isLeaf ? node.cited_documents?.length || 0 : 0;
+
       // Calculate children's citations (recursive)
       let childrenCitations = 0;
       if (Array.isArray(node.children)) {
         const countChildCitations = (childNodeId) => {
           const childNode = graphNodes[childNodeId];
           if (!childNode) return 0;
-          const childIsLeaf = !Array.isArray(childNode.children) || childNode.children.length === 0;
-          let count = childIsLeaf ? (childNode.cited_documents?.length || 0) : 0;
+          const childIsLeaf =
+            !Array.isArray(childNode.children) ||
+            childNode.children.length === 0;
+          let count = childIsLeaf ? childNode.cited_documents?.length || 0 : 0;
           if (childNode.children) {
-            childNode.children.forEach(cid => {
+            childNode.children.forEach((cid) => {
               count += countChildCitations(cid);
             });
           }
           return count;
         };
-        node.children.forEach(childId => {
+        node.children.forEach((childId) => {
           childrenCitations += countChildCitations(childId);
         });
       }

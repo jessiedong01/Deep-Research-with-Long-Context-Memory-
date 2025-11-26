@@ -41,6 +41,7 @@ class PresearcherAgent:
         self.dag_processor = DAGProcessor(
             literature_search_agent=literature_search_agent,
             lm=lm,
+            dag_generator=self.dag_generation_agent,  # For subtree generation during refinement
         )
         self.final_report_generator = FinalReportGenerator(lm=lm)
 
@@ -135,6 +136,7 @@ class PresearcherAgent:
             graph=graph,
             max_retriever_calls=request.max_retriever_calls,
             max_refinements=request.max_refinements,
+            gap_fill_retriever_calls=request.gap_fill_retriever_calls,
             on_graph_update=on_graph_update,
         )
         

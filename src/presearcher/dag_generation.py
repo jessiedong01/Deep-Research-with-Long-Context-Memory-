@@ -22,7 +22,8 @@ from utils.literature_search import LiteratureSearchAgent
 from utils.logger import get_logger
 
 
-_VALID_OUTPUT_FORMATS = {"boolean", "short_answer", "list", "table_csv", "report"}
+# Simplified to bullet points only for faster processing
+_VALID_OUTPUT_FORMATS = {"list"}
 
 
 class FullDAGGenerationSignature(dspy.Signature):
@@ -38,8 +39,7 @@ class FullDAGGenerationSignature(dspy.Signature):
     1. Root node: Use the main topic (id="node_0", parent_id=null).
     2. Decomposition: Break complex questions into focused, standalone
        sub-questions that collectively answer the parent.
-    3. Output formats: Choose the simplest format that fully answers the
-       question (boolean, short_answer, list, table_csv, report).
+    3. Output formats: Always use "list" format (bullet points) for all nodes.
     4. Composition instructions: Non-leaf nodes must describe how to combine
        the child answers to answer the parent question.
     5. Constraints: Respect max_depth, max_nodes, max_subtasks.
@@ -54,7 +54,7 @@ class FullDAGGenerationSignature(dspy.Signature):
         "id": "node_0",
         "question": "What are the health benefits of green tea?",
         "parent_id": null,
-        "expected_output_format": "report",
+        "expected_output_format": "list",
         "composition_instructions": "Synthesize antioxidant properties, disease prevention evidence, and cognitive effects."
       },
       {
@@ -68,14 +68,14 @@ class FullDAGGenerationSignature(dspy.Signature):
         "id": "node_2",
         "question": "What does clinical research show about green tea consumption and chronic disease prevention?",
         "parent_id": "node_0",
-        "expected_output_format": "table_csv",
+        "expected_output_format": "list",
         "composition_instructions": ""
       },
       {
         "id": "node_3",
         "question": "How does green tea affect cognitive function and mental health?",
         "parent_id": "node_0",
-        "expected_output_format": "short_answer",
+        "expected_output_format": "list",
         "composition_instructions": ""
       }
     ]
@@ -90,28 +90,28 @@ class FullDAGGenerationSignature(dspy.Signature):
         "id": "node_0",
         "question": "How do renewable energy policies in Germany compare to those in the United States?",
         "parent_id": null,
-        "expected_output_format": "report",
+        "expected_output_format": "list",
         "composition_instructions": "Compare regulatory frameworks, incentives, and outcomes."
       },
       {
         "id": "node_1",
         "question": "What are the key regulatory frameworks governing renewable energy in Germany and the United States?",
         "parent_id": "node_0",
-        "expected_output_format": "table_csv",
-        "composition_instructions": "Create a comparison table with columns: Country, Key Laws, Regulatory Bodies, Mandates."
+        "expected_output_format": "list",
+        "composition_instructions": "Combine key laws and regulatory bodies from both countries."
       },
       {
         "id": "node_2",
         "question": "What financial incentives exist for renewable energy adoption in Germany versus the United States?",
         "parent_id": "node_0",
-        "expected_output_format": "table_csv",
-        "composition_instructions": "Merge incentives into a table with columns: Country, Incentive Type, Description, Scale."
+        "expected_output_format": "list",
+        "composition_instructions": "Summarize incentives from both countries."
       },
       {
         "id": "node_3",
         "question": "What have been the outcomes of renewable energy policies in Germany compared to the United States?",
         "parent_id": "node_0",
-        "expected_output_format": "report",
+        "expected_output_format": "list",
         "composition_instructions": "Synthesize capacity growth, grid integration, and economic impact data."
       },
       {
@@ -132,14 +132,14 @@ class FullDAGGenerationSignature(dspy.Signature):
         "id": "node_6",
         "question": "What is the current renewable energy capacity and growth rate in Germany?",
         "parent_id": "node_3",
-        "expected_output_format": "short_answer",
+        "expected_output_format": "list",
         "composition_instructions": ""
       },
       {
         "id": "node_7",
         "question": "What is the current renewable energy capacity and growth rate in the United States?",
         "parent_id": "node_3",
-        "expected_output_format": "short_answer",
+        "expected_output_format": "list",
         "composition_instructions": ""
       }
     ]
@@ -154,28 +154,28 @@ class FullDAGGenerationSignature(dspy.Signature):
         "id": "node_0",
         "question": "Is transformer architecture more efficient than RNN for machine translation?",
         "parent_id": null,
-        "expected_output_format": "boolean",
+        "expected_output_format": "list",
         "composition_instructions": "Weigh computational efficiency, translation quality, and training requirements."
       },
       {
         "id": "node_1",
         "question": "What is the computational complexity of transformers versus RNNs for sequence-to-sequence tasks?",
         "parent_id": "node_0",
-        "expected_output_format": "table_csv",
+        "expected_output_format": "list",
         "composition_instructions": ""
       },
       {
         "id": "node_2",
         "question": "How do BLEU scores compare between transformer and RNN-based machine translation models?",
         "parent_id": "node_0",
-        "expected_output_format": "short_answer",
+        "expected_output_format": "list",
         "composition_instructions": ""
       },
       {
         "id": "node_3",
         "question": "What are the training time and resource requirements for transformers compared to RNNs?",
         "parent_id": "node_0",
-        "expected_output_format": "table_csv",
+        "expected_output_format": "list",
         "composition_instructions": ""
       }
     ]
@@ -196,7 +196,7 @@ class FullDAGGenerationSignature(dspy.Signature):
     dag_json: str = dspy.OutputField(
         description=(
             "JSON array of node objects. Each node requires: id (string), question (string), "
-            "parent_id (string or null), expected_output_format (boolean|short_answer|list|table_csv|report), "
+            "parent_id (string or null), expected_output_format (always 'list' for bullet points), "
             "composition_instructions (string, empty for leaves)."
         )
     )
@@ -242,26 +242,35 @@ class DAGGenerationAgent:
     async def generate_dag(
         self,
         request: PresearcherAgentRequest,
+        max_retriever_calls: int | None = None,
     ) -> ResearchGraph:
-        """Generate a research DAG by combining one literature search with one LM call."""
+        """Generate a research DAG by combining one literature search with one LM call.
+        
+        Args:
+            request: The presearcher agent request
+            max_retriever_calls: Override for retriever calls (defaults to request.dag_gen_retriever_calls)
+        """
+        retriever_calls = max_retriever_calls if max_retriever_calls is not None else request.dag_gen_retriever_calls
+        
         self.logger.info(
             f"Starting simplified DAG generation for topic={request.topic} "
-            f"(max_depth={request.max_depth}, max_nodes={request.max_nodes}, max_subtasks={request.max_subtasks})"
+            f"(max_depth={request.max_depth}, max_nodes={request.max_nodes}, max_subtasks={request.max_subtasks}, retriever_calls={retriever_calls})"
         )
 
         literature_summary = "No literature summary available."
-        try:
-            lit_request = LiteratureSearchAgentRequest(
-                topic=request.topic,
-                max_retriever_calls=2,
-                guideline="Broad overview to inform DAG planning",
-                with_synthesis=True,
-            )
-            lit_response = await self.literature_search_agent.aforward(lit_request)
-            if getattr(lit_response, "writeup", None):
-                literature_summary = lit_response.writeup[:2000]
-        except Exception as exc:  # pragma: no cover - defensive logging
-            self.logger.warning(f"Literature search failed for topic '{request.topic}': {exc}")
+        if retriever_calls > 0:
+            try:
+                lit_request = LiteratureSearchAgentRequest(
+                    topic=request.topic,
+                    max_retriever_calls=retriever_calls,
+                    guideline="Broad overview to inform DAG planning",
+                    with_synthesis=True,
+                )
+                lit_response = await self.literature_search_agent.aforward(lit_request)
+                if getattr(lit_response, "writeup", None):
+                    literature_summary = lit_response.writeup[:2000]
+            except Exception as exc:  # pragma: no cover - defensive logging
+                self.logger.warning(f"Literature search failed for topic '{request.topic}': {exc}")
 
         try:
             dag_result = await self.dag_generator.aforward(
@@ -278,7 +287,7 @@ class DAGGenerationAgent:
             self.logger.error(f"Full DAG generation failed; falling back to root-only DAG: {exc}")
             graph = ResearchGraph()
             root = graph.get_or_create_node(question=request.topic, parent_id=None, depth=0)
-            root.expected_output_format = "report"
+            root.expected_output_format = "list"
 
         stats = {
             "total_nodes": len(graph.nodes),
@@ -316,7 +325,7 @@ class DAGGenerationAgent:
                 result = await self.composition_refiner.aforward(
                     parent_id=node.id,
                     parent_question=node.question,
-                    parent_format=node.expected_output_format or "report",
+                    parent_format=node.expected_output_format or "list",
                     child_summaries="\n".join(f"- {s}" for s in child_summaries),
                     lm=self.lm,
                 )
@@ -375,7 +384,7 @@ class DAGGenerationAgent:
                 declared_id = str(node_spec.get("id", "")).strip() or None
                 question = (node_spec.get("question") or "").strip()
                 parent_key = node_spec.get("parent_id")
-                expected_format = (node_spec.get("expected_output_format") or "report").strip().lower()
+                expected_format = (node_spec.get("expected_output_format") or "list").strip().lower()
                 composition = (node_spec.get("composition_instructions") or "").strip()
 
                 if not question:
@@ -403,7 +412,7 @@ class DAGGenerationAgent:
                     break
 
                 if expected_format not in _VALID_OUTPUT_FORMATS:
-                    expected_format = "report"
+                    expected_format = "list"
 
                 node = graph.get_or_create_node(
                     question=question,
@@ -427,7 +436,7 @@ class DAGGenerationAgent:
 
         if not graph.nodes:
             root = graph.get_or_create_node(question=request.topic, parent_id=None, depth=0)
-            root.expected_output_format = "report"
+            root.expected_output_format = "list"
 
         if graph.root_id is None:
             # Ensure the earliest inserted node is root for visualization clarity.

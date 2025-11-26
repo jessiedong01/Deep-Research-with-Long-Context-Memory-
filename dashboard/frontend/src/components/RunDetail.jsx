@@ -33,21 +33,27 @@ export function RunDetail() {
   // Handle WebSocket messages for real-time updates
   useEffect(() => {
     if (messages.length === 0) return;
-    
+
     const latestMessage = messages[messages.length - 1];
-    
+
     if (latestMessage.type === "graph_update" && latestMessage.data) {
       // Update graph from WebSocket push
       const { graph: graphData, metadata } = latestMessage.data;
       if (graphData) {
-        setGraph({ graph: graphData, metadata: { ...metadata, graph_source: "snapshot" } });
+        setGraph({
+          graph: graphData,
+          metadata: { ...metadata, graph_source: "snapshot" },
+        });
         setGraphError(null);
         setGraphNotFound(false);
       }
     } else if (latestMessage.type === "status_change" && latestMessage.data) {
       // Refresh run detail when status changes
       loadRunDetail();
-      if (latestMessage.data.status === "completed" || latestMessage.data.status === "failed") {
+      if (
+        latestMessage.data.status === "completed" ||
+        latestMessage.data.status === "failed"
+      ) {
         // Final fetch to get completed state
         loadGraph();
         loadPhaseData();
@@ -189,14 +195,14 @@ export function RunDetail() {
     return `${mins}m ${secs}s`;
   };
 
-const formatGraphTimestamp = (timestamp) => {
-  if (!timestamp) return null;
-  const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) {
-    return timestamp;
-  }
-  return date.toLocaleString();
-};
+  const formatGraphTimestamp = (timestamp) => {
+    if (!timestamp) return null;
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) {
+      return timestamp;
+    }
+    return date.toLocaleString();
+  };
 
   const getStatusBadge = (status) => {
     const statusClass = `status-badge status-${status.toLowerCase()}`;
@@ -471,7 +477,8 @@ const formatGraphTimestamp = (timestamp) => {
                   </span>
                   {graph.metadata.snapshot_ts && (
                     <span>
-                      Updated: {formatGraphTimestamp(graph.metadata.snapshot_ts)}
+                      Updated:{" "}
+                      {formatGraphTimestamp(graph.metadata.snapshot_ts)}
                     </span>
                   )}
                 </div>
@@ -529,7 +536,9 @@ const formatGraphTimestamp = (timestamp) => {
                     {(() => {
                       const rootId = graph?.graph?.root_id;
                       const isRootNode =
-                        rootId && selectedNode?.id && selectedNode.id === rootId;
+                        rootId &&
+                        selectedNode?.id &&
+                        selectedNode.id === rootId;
                       const nodeAnswer =
                         selectedNode?.metadata?.answer ||
                         (isRootNode ? selectedNode.report : null);
@@ -544,21 +553,22 @@ const formatGraphTimestamp = (timestamp) => {
                         );
                       }
 
-                      const isCSV = selectedNode.expected_output_format === 'table_csv';
+                      const isCSV =
+                        selectedNode.expected_output_format === "table_csv";
 
                       const renderCSVTable = (csvText) => {
                         // Parse CSV properly handling quoted fields
                         const parseCSVLine = (line) => {
                           const result = [];
-                          let current = '';
+                          let current = "";
                           let inQuotes = false;
                           for (let i = 0; i < line.length; i++) {
                             const char = line[i];
                             if (char === '"') {
                               inQuotes = !inQuotes;
-                            } else if (char === ',' && !inQuotes) {
+                            } else if (char === "," && !inQuotes) {
                               result.push(current.trim());
-                              current = '';
+                              current = "";
                             } else {
                               current += char;
                             }
@@ -567,20 +577,26 @@ const formatGraphTimestamp = (timestamp) => {
                           return result;
                         };
 
-                        const lines = csvText.trim().split('\n');
+                        const lines = csvText.trim().split("\n");
                         const headers = parseCSVLine(lines[0]);
-                        const rows = lines.slice(1).map(line => parseCSVLine(line));
+                        const rows = lines
+                          .slice(1)
+                          .map((line) => parseCSVLine(line));
                         return (
                           <table className="csv-table">
                             <thead>
                               <tr>
-                                {headers.map((h, i) => <th key={i}>{h}</th>)}
+                                {headers.map((h, i) => (
+                                  <th key={i}>{h}</th>
+                                ))}
                               </tr>
                             </thead>
                             <tbody>
                               {rows.map((row, i) => (
                                 <tr key={i}>
-                                  {row.map((cell, j) => <td key={j}>{cell}</td>)}
+                                  {row.map((cell, j) => (
+                                    <td key={j}>{cell}</td>
+                                  ))}
                                 </tr>
                               ))}
                             </tbody>
@@ -597,7 +613,11 @@ const formatGraphTimestamp = (timestamp) => {
                               : "Summary generated for this sub-question."}
                           </p>
                           <div className="node-markdown-content">
-                            {isCSV ? renderCSVTable(nodeAnswer) : <ReactMarkdown>{nodeAnswer}</ReactMarkdown>}
+                            {isCSV ? (
+                              renderCSVTable(nodeAnswer)
+                            ) : (
+                              <ReactMarkdown>{nodeAnswer}</ReactMarkdown>
+                            )}
                           </div>
                         </div>
                       );
@@ -611,13 +631,22 @@ const formatGraphTimestamp = (timestamp) => {
                           </h4>
                           <ul className="node-citations-list">
                             {selectedNode.cited_documents.map((doc, idx) => {
-                              const title = doc.title || doc.url || `Source ${idx + 1}`;
+                              const title =
+                                doc.title || doc.url || `Source ${idx + 1}`;
                               return (
-                                <li key={doc.url || `${selectedNode.id}-doc-${idx}`}>
+                                <li
+                                  key={
+                                    doc.url || `${selectedNode.id}-doc-${idx}`
+                                  }
+                                >
                                   <div className="citation-main">
-                                    <span className="citation-title">{title}</span>
+                                    <span className="citation-title">
+                                      {title}
+                                    </span>
                                     {doc.url && (
-                                      <span className="citation-url">{doc.url}</span>
+                                      <span className="citation-url">
+                                        {doc.url}
+                                      </span>
                                     )}
                                     {doc.url && (
                                       <a

@@ -176,8 +176,12 @@ class LogScanner:
             if any("Pipeline completed successfully" in log.get('message', '') for log in log_lines):
                 status = RunStatus.COMPLETED
                 completed_at = datetime.fromisoformat(last_log['timestamp'])
-            # Check if there's an error
-            elif any("error" in log.get('level', '').lower() for log in log_lines):
+            # Check for fatal pipeline errors (not individual node failures which are handled gracefully)
+            elif any(
+                log.get('level', '').lower() == 'error' and 
+                'Failed to process node' not in log.get('message', '')
+                for log in log_lines
+            ):
                 status = RunStatus.FAILED
                 completed_at = datetime.fromisoformat(last_log['timestamp'])
             # Check if run is stale (no updates in last 10 minutes) - mark as failed
